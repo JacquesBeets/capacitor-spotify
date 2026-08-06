@@ -1,0 +1,97 @@
+import Foundation
+import SpotifyiOS
+
+/// Playback commands, all of them thin wrappers over `SPTAppRemotePlayerAPI`.
+///
+/// Split out of `SpotifyRemoteManager` so the connection lifecycle and the
+/// command surface stay readable independently.
+extension SpotifyRemoteManager {
+    // MARK: - Playback
+
+    func play(uri: String?, completion: @escaping VoidCompletion) {
+        guard let player = requirePlayer(completion) else { return }
+        guard let uri = uri, !uri.isEmpty else {
+            player.resume(playbackCallback(completion))
+            return
+        }
+        player.play(uri, callback: playbackCallback(completion))
+    }
+
+    func resume(completion: @escaping VoidCompletion) {
+        requirePlayer(completion)?.resume(playbackCallback(completion))
+    }
+
+    func pause(completion: @escaping VoidCompletion) {
+        requirePlayer(completion)?.pause(playbackCallback(completion))
+    }
+
+    func togglePlay(completion: @escaping VoidCompletion) {
+        guard let player = requirePlayer(completion) else { return }
+        player.getPlayerState { [weak self] result, error in
+            guard let self = self else { return }
+            guard let state = result as? (any SPTAppRemotePlayerState), error == nil else {
+                completion(.failure(SpotifyError.from(error, fallback: .playbackFailed, prefix: "Could not read player state")))
+                return
+            }
+            if state.isPaused {
+                player.resume(self.playbackCallback(completion))
+            } else {
+                player.pause(self.playbackCallback(completion))
+            }
+        }
+    }
+
+    func skipNext(completion: @escaping VoidCompletion) {
+        requirePlayer(completion)?.skip(toNext: playbackCallback(completion))
+    }
+
+    func skipPrevious(completion: @escaping VoidCompletion) {
+        requirePlayer(completion)?.skip(toPrevious: playbackCallback(completion))
+    }
+
+    func seek(toPositionMs positionMs: Int, completion: @escaping VoidCompletion) {
+        requirePlayer(completion)?.seek(toPosition: positionMs, callback: playbackCallback(completion))
+    }
+
+    func setShuffle(_ enabled: Bool, completion: @escaping VoidCompletion) {
+        requirePlayer(completion)?.setShuffle(enabled, callback: playbackCallback(completion))
+    }
+
+    func setRepeatMode(_ mode: SPTAppRemotePlaybackOptionsRepeatMode, completion: @escaping VoidCompletion) {
+        requirePlayer(completion)?.setRepeatMode(mode, callback: playbackCallback(completion))
+    }
+
+    func getPlayerState(completion: @escaping StateCompletion) {
+        guard appRemote.isConnected, let player = appRemote.playerAPI else {
+            completion(.failure(SpotifyError(.notConnected, "Not connected to the Spotify app — call connect() first")))
+            return
+        }
+        player.getPlayerState { result, error in
+            guard let state = result as? (any SPTAppRemotePlayerState), error == nil else {
+                completion(.failure(SpotifyError.from(error, fallback: .playbackFailed, prefix: "Could not read player state")))
+                return
+            }
+            completion(.success(playerStateToJS(state)))
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func requirePlayer(_ completion: @escaping VoidCompletion) -> (any SPTAppRemotePlayerAPI)? {
+        guard appRemote.isConnected, let player = appRemote.playerAPI else {
+            completion(.failure(SpotifyError(.notConnected, "Not connected to the Spotify app — call connect() first")))
+            return nil
+        }
+        return player
+    }
+
+    private func playbackCallback(_ completion: @escaping VoidCompletion) -> SPTAppRemoteCallback {
+        { _, error in
+            if let error = error {
+                completion(.failure(SpotifyError.from(error, fallback: .playbackFailed, prefix: "Playback command failed")))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
+}
