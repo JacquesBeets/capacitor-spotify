@@ -50,17 +50,34 @@ kotlin {
     jvmToolchain(21)
 }
 
+// Spotify does not publish the App Remote SDK to any public Maven repository, so
+// the official AAR is vendored under android/repo as a local Maven repository.
+def spotifyLocalRepo = uri("${projectDir}/repo")
+
 repositories {
     google()
     mavenCentral()
+    maven { url spotifyLocalRepo }
 }
 
+// Gradle repositories are NOT transitive: the consuming app resolves this
+// plugin's dependencies using its own repository list. Registering the vendored
+// repo on every project of the consuming build makes `npx cap sync` enough —
+// no app-side Gradle changes are required to resolve the App Remote AAR.
+rootProject.allprojects {
+    repositories {
+        maven { url spotifyLocalRepo }
+    }
+}
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation project(':capacitor-android')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.core:core-ktx:$androidxCoreKTXVersion"
+    // `api` so the consuming app can also talk to the App Remote types directly.
+    api "com.spotify.appremote:app-remote:0.8.0"
+    implementation "com.spotify.android:auth:5.0.0"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

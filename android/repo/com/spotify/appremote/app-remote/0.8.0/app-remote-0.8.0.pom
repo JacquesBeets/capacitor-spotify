@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.spotify.appremote</groupId>
+  <artifactId>app-remote</artifactId>
+  <version>0.8.0</version>
+  <packaging>aar</packaging>
+
+  <name>Spotify App Remote</name>
+  <description>
+    Spotify App Remote SDK for Android, vendored from the official release
+    https://github.com/spotify/android-sdk/releases/tag/v0.8.0-appremote_v2.1.0-auth
+    (asset: spotify-app-remote-release-0.8.0.aar). Spotify does not publish this
+    artifact to Maven Central, so it is shipped inside this plugin as a local
+    Maven repository.
+  </description>
+  <url>https://github.com/spotify/android-sdk</url>
+
+  <licenses>
+    <license>
+      <name>Spotify Developer Terms of Service</name>
+      <url>https://developer.spotify.com/terms/</url>
+    </license>
+  </licenses>
+
+  <dependencies>
+    <!--
+      The App Remote AAR does not bundle Gson, but its default JSON mapper
+      (com.spotify.protocol.mappers.gson.GsonMapper) requires it at runtime.
+      Declaring it here makes it flow transitively to the consuming app.
+    -->
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.11.0</version>
+      <scope>compile</scope>
+    </dependency>
+  </dependencies>
+</project>

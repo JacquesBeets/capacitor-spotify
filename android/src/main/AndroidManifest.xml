@@ -1,2 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        API 30+ package visibility: without this the plugin cannot see the
+        Spotify app (isSpotifyAppInstalled(), App Remote service binding and the
+        auth-library SSO flow all rely on it). This merges into the consuming
+        app's manifest.
+    -->
+    <queries>
+        <package android:name="com.spotify.music" />
+    </queries>
+
 </manifest>
