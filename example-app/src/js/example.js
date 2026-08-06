@@ -1,7 +1,9 @@
 import { Capacitor } from '@capacitor/core';
 import { Spotify } from 'capacitor-spotify';
 
-import { CLIENT_ID, REDIRECT_URI } from './config.js';
+import { CLIENT_ID, REDIRECT_URI_NATIVE, REDIRECT_URI_WEB } from './config.js';
+
+const REDIRECT_URI = Capacitor.getPlatform() === 'web' ? REDIRECT_URI_WEB : REDIRECT_URI_NATIVE;
 
 const logEl = document.getElementById('log');
 const statusEl = document.getElementById('status');

@@ -25,6 +25,12 @@ const DEFAULT_SCOPES = [
   'user-read-currently-playing',
 ];
 
+/**
+ * The Web Playback SDK rejects tokens without these alongside `streaming`
+ * ("Invalid token scopes" on connect), so they are always added on web.
+ */
+const WEB_SDK_REQUIRED_SCOPES = ['streaming', 'user-read-email', 'user-read-private'];
+
 /** Unreserved characters, per RFC 7636 §4.1. */
 const VERIFIER_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
 /** Anything from 43 to 128 characters is a valid `code_verifier`. */
@@ -101,7 +107,8 @@ export class SpotifyAuth {
 
     writeJson<PkceStash>('session', PKCE_STORAGE_KEY, { verifier, state });
 
-    const scopes = options?.scopes?.length ? options.scopes : config.scopes;
+    const requested = options?.scopes?.length ? options.scopes : config.scopes;
+    const scopes = [...new Set([...requested, ...WEB_SDK_REQUIRED_SCOPES])];
     const params = new URLSearchParams({
       client_id: config.clientId,
       response_type: 'code',
