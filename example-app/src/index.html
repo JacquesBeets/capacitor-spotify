@@ -2,23 +2,92 @@
 <html lang="en" dir="ltr" class="hydrated">
   <head>
     <meta charset="UTF-8" />
-    <title>Example Capacitor App</title>
+    <title>Capacitor Spotify Example</title>
     <meta
       name="viewport"
       content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <meta name="format-detection" content="telephone=no" />
+    <style>
+      body {
+        font-family: -apple-system, system-ui, sans-serif;
+        margin: 0;
+        padding: 16px;
+        background: #121212;
+        color: #fff;
+      }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 0.9rem; text-transform: uppercase; color: #1db954; margin: 20px 0 8px; }
+      button {
+        background: #1db954;
+        color: #000;
+        border: none;
+        border-radius: 20px;
+        padding: 8px 14px;
+        margin: 3px;
+        font-weight: 600;
+        font-size: 0.85rem;
+      }
+      button.secondary { background: #333; color: #fff; }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid #444;
+        background: #222;
+        color: #fff;
+        margin-bottom: 6px;
+      }
+      #status { color: #1db954; font-size: 0.9rem; min-height: 1.2em; }
+      #track { font-size: 1rem; margin: 8px 0; min-height: 1.4em; }
+      #log {
+        background: #000;
+        border-radius: 8px;
+        padding: 10px;
+        font-family: ui-monospace, monospace;
+        font-size: 0.72rem;
+        line-height: 1.5;
+        max-height: 320px;
+        overflow-y: auto;
+        word-break: break-all;
+      }
+    </style>
   </head>
   <body>
     <main>
-      <h1>Capacitor Test Plugin Project</h1>
-      <p>
-        This project can be used to test out the functionality of your plugin. Nothing in the
-        <em>example-app/</em> folder will be published to npm when using this template, so you can create away!
-      </p>
-      <label for="echoInput">Echo Text:</label>
-      <input type="text" id="echoInput" name="echoInput" value="Hello World!" />
-      <button onclick="testEcho()">Click Me!</button>
+      <h1>Capacitor Spotify Example</h1>
+      <div id="status">…</div>
+      <div id="track"></div>
+
+      <h2>Auth</h2>
+      <button data-action="authorize">Authorize</button>
+      <button data-action="getAccessToken" class="secondary">Get token</button>
+      <button data-action="logout" class="secondary">Logout</button>
+      <button data-action="isSpotifyAppInstalled" class="secondary">App installed?</button>
+
+      <h2>Connection</h2>
+      <button data-action="connect">Connect</button>
+      <button data-action="disconnect" class="secondary">Disconnect</button>
+
+      <h2>Playback</h2>
+      <input type="text" id="uriInput" value="spotify:playlist:37i9dQZF1DXcBWIGoYBM5M" />
+      <button data-action="play">Play URI</button>
+      <button data-action="pause" class="secondary">Pause</button>
+      <button data-action="resume" class="secondary">Resume</button>
+      <button data-action="togglePlay" class="secondary">Toggle</button>
+      <button data-action="skipPrevious" class="secondary">⏮ Prev</button>
+      <button data-action="skipNext" class="secondary">Next ⏭</button>
+      <button data-action="seekTo" class="secondary">Seek 0:30</button>
+      <button data-action="shuffleOn" class="secondary">Shuffle on</button>
+      <button data-action="shuffleOff" class="secondary">Shuffle off</button>
+      <button data-action="repeatContext" class="secondary">Repeat ctx</button>
+      <button data-action="repeatOff" class="secondary">Repeat off</button>
+      <button data-action="volumeHalf" class="secondary">Vol 50%</button>
+      <button data-action="getPlayerState" class="secondary">Get state</button>
+
+      <h2>Log</h2>
+      <div id="log"></div>
     </main>
 
     <script src="./js/example.js" type="module"></script>

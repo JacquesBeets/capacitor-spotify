@@ -296,10 +296,7 @@ export interface SpotifyPlugin {
   getPlayerState(): Promise<PlayerState>;
 
   /** Fired whenever the player state changes (track, pause, seek, ...). */
-  addListener(
-    eventName: 'playerStateChanged',
-    listener: (state: PlayerState) => void,
-  ): Promise<PluginListenerHandle>;
+  addListener(eventName: 'playerStateChanged', listener: (state: PlayerState) => void): Promise<PluginListenerHandle>;
 
   /** Fired when the player connection is established or lost. */
   addListener(
@@ -308,10 +305,7 @@ export interface SpotifyPlugin {
   ): Promise<PluginListenerHandle>;
 
   /** Fired when authentication is gained, refreshed, or lost. */
-  addListener(
-    eventName: 'authStateChanged',
-    listener: (event: AuthStateChange) => void,
-  ): Promise<PluginListenerHandle>;
+  addListener(eventName: 'authStateChanged', listener: (event: AuthStateChange) => void): Promise<PluginListenerHandle>;
 
   removeAllListeners(): Promise<void>;
 }
