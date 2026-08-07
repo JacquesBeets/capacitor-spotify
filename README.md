@@ -16,6 +16,8 @@ Capacitor 8 plugin for Spotify: one TypeScript API over the **Spotify iOS SDK** 
 | `setShuffle` / `setRepeatMode` | ✅ | ✅ | ✅ |
 | `setVolume` / `getVolume` | ❌ `NOT_SUPPORTED` | ✅ / best-effort | ✅ |
 | `getImage` (album art) | ✅ via Spotify app | ✅ via Spotify app | ✅ CDN URL |
+| `getUserCapabilities` (Premium check) | ✅ via Spotify app | ✅ via Spotify app | ✅ when connected |
+| `addToQueue` / `getDevices` / `transferPlayback` | ✅ Web API | ✅ Web API | ✅ Web API |
 | `playerStateChanged` live events | ✅ | ✅ | ✅ |
 | Audio plays… | in the Spotify app | in the Spotify app | in your web page |
 | Requires Spotify app installed | ✅ | ✅ | — |
@@ -210,6 +212,10 @@ A runnable demo lives in [`example-app/`](./example-app) — bring your own clie
 * [`getVolume()`](#getvolume)
 * [`getPlayerState()`](#getplayerstate)
 * [`getImage(...)`](#getimage)
+* [`getUserCapabilities()`](#getusercapabilities)
+* [`addToQueue(...)`](#addtoqueue)
+* [`getDevices()`](#getdevices)
+* [`transferPlayback(...)`](#transferplayback)
 * [`addListener('playerStateChanged', ...)`](#addlistenerplayerstatechanged-)
 * [`addListener('connectionStateChanged', ...)`](#addlistenerconnectionstatechanged-)
 * [`addListener('authStateChanged', ...)`](#addlistenerauthstatechanged-)
@@ -531,6 +537,69 @@ URL without a network round-trip.
 --------------------
 
 
+### getUserCapabilities()
+
+```typescript
+getUserCapabilities() => Promise<UserCapabilities>
+```
+
+Whether the account can play content on demand (Premium) — check before
+enabling seek/track-pick UI. iOS/Android read this from the Spotify app
+(requires a connected player). Web: `true` once the player is connected
+(the Web Playback SDK itself requires Premium); when not connected it is
+inferred from the user profile where available and otherwise rejects
+`NOT_SUPPORTED` (development-mode apps get no subscription field).
+
+**Returns:** <code>Promise&lt;<a href="#usercapabilities">UserCapabilities</a>&gt;</code>
+
+--------------------
+
+
+### addToQueue(...)
+
+```typescript
+addToQueue(options: { uri: string; }) => Promise<void>
+```
+
+Append a track/episode URI to the playback queue (Web API on all
+platforms; requires an active device and Premium).
+
+| Param         | Type                          |
+| ------------- | ----------------------------- |
+| **`options`** | <code>{ uri: string; }</code> |
+
+--------------------
+
+
+### getDevices()
+
+```typescript
+getDevices() => Promise<{ devices: SpotifyDevice[]; }>
+```
+
+List the user's available Spotify Connect devices (Web API).
+
+**Returns:** <code>Promise&lt;{ devices: SpotifyDevice[]; }&gt;</code>
+
+--------------------
+
+
+### transferPlayback(...)
+
+```typescript
+transferPlayback(options: { deviceId: string; play?: boolean; }) => Promise<void>
+```
+
+Transfer playback to another Connect device (Web API). With
+`play: true` playback starts on the target immediately.
+
+| Param         | Type                                               |
+| ------------- | -------------------------------------------------- |
+| **`options`** | <code>{ deviceId: string; play?: boolean; }</code> |
+
+--------------------
+
+
 ### addListener('playerStateChanged', ...)
 
 ```typescript
@@ -718,6 +787,26 @@ removeAllListeners() => Promise<void>
 | ------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
 | **`imageId`** | <code>string</code> | The image identifier from {@link <a href="#track">Track.imageUri</a>} — a `spotify:image:...` value on iOS/Android, or an `https://` URL on web. |                  |
 | **`width`**   | <code>number</code> | Desired image width in pixels. Native maps this to the nearest size the Spotify app provides (144/240/360/480/720); web ignores it.              | <code>480</code> |
+
+
+#### UserCapabilities
+
+| Prop                  | Type                 | Description                                                                                                                                                                                         |
+| --------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`canPlayOnDemand`** | <code>boolean</code> | Whether the user's account can play arbitrary content on demand (Premium). Free-tier accounts get shuffle-based playback and cannot seek or pick exact tracks — check this before enabling such UI. |
+
+
+#### SpotifyDevice
+
+| Prop                   | Type                        | Description                                                                |
+| ---------------------- | --------------------------- | -------------------------------------------------------------------------- |
+| **`id`**               | <code>string \| null</code> | Connect device ID. Null for devices that cannot be targeted.               |
+| **`name`**             | <code>string</code>         |                                                                            |
+| **`type`**             | <code>string</code>         | Device kind reported by Spotify, e.g. `Computer`, `Smartphone`, `Speaker`. |
+| **`isActive`**         | <code>boolean</code>        |                                                                            |
+| **`isPrivateSession`** | <code>boolean</code>        |                                                                            |
+| **`isRestricted`**     | <code>boolean</code>        | Restricted devices cannot be controlled via the Web API.                   |
+| **`volumePercent`**    | <code>number</code>         | Current volume 0–100, when the device reports it.                          |
 
 
 #### PluginListenerHandle

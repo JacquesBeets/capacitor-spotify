@@ -12,14 +12,18 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.spotify.protocol.types.Image
+import java.net.URLEncoder
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import org.json.JSONArray
 import org.json.JSONException
+import org.json.JSONObject
 
 @CapacitorPlugin(name = "Spotify")
 class SpotifyPlugin : Plugin() {
 
     private lateinit var authManager: SpotifyAuthManager
+    private lateinit var webApi: SpotifyWebApi
     private val remoteManager = SpotifyRemoteManager()
 
     /** Auth and token work is blocking; keep it off the bridge thread. */
@@ -40,6 +44,7 @@ class SpotifyPlugin : Plugin() {
 
     override fun load() {
         authManager = SpotifyAuthManager(context)
+        webApi = SpotifyWebApi(authManager, executor)
         remoteManager.onPlayerState = { state, playerContext ->
             notifyListeners(EVENT_PLAYER_STATE, PlayerStateMapper.toJSObject(state, playerContext))
         }
@@ -365,6 +370,76 @@ class SpotifyPlugin : Plugin() {
         }
     }
 
+    @PluginMethod
+    fun getUserCapabilities(call: PluginCall) {
+        if (!requireInitialized(call)) return
+        runOnMain {
+            remoteManager.getUserCapabilities(
+                { canPlayOnDemand -> call.resolve(JSObject().put("canPlayOnDemand", canPlayOnDemand)) },
+                { rejectPlayback(call, it) },
+            )
+        }
+    }
+
+    // endregion
+
+    // region web api
+
+    @PluginMethod
+    fun addToQueue(call: PluginCall) {
+        if (!requireInitialized(call)) return
+        val uri = call.getString("uri")
+        if (uri.isNullOrEmpty()) {
+            call.reject("addToQueue() requires a uri.", SpotifyErrors.UNKNOWN)
+            return
+        }
+        webApi.request(
+            "POST",
+            "/me/player/queue?uri=${URLEncoder.encode(uri, "UTF-8")}",
+            onSuccess = { call.resolve() },
+            onError = { rejectWebApi(call, it) },
+        )
+    }
+
+    @PluginMethod
+    fun getDevices(call: PluginCall) {
+        if (!requireInitialized(call)) return
+        webApi.request(
+            "GET",
+            "/me/player/devices",
+            onSuccess = { body ->
+                try {
+                    call.resolve(JSObject().put("devices", devicesToJSArray(body)))
+                } catch (e: JSONException) {
+                    call.reject("Could not read the Spotify device list: ${e.message}", SpotifyErrors.UNKNOWN)
+                }
+            },
+            onError = { rejectWebApi(call, it) },
+        )
+    }
+
+    @PluginMethod
+    fun transferPlayback(call: PluginCall) {
+        if (!requireInitialized(call)) return
+        val deviceId = call.getString("deviceId")
+        if (deviceId.isNullOrEmpty()) {
+            call.reject("transferPlayback() requires a deviceId.", SpotifyErrors.UNKNOWN)
+            return
+        }
+        val play = call.getBoolean("play", false) ?: false
+        val body = JSONObject()
+            .put("device_ids", JSONArray().put(deviceId))
+            .put("play", play)
+            .toString()
+        webApi.request(
+            "PUT",
+            "/me/player",
+            body,
+            onSuccess = { call.resolve() },
+            onError = { rejectWebApi(call, it) },
+        )
+    }
+
     // endregion
 
     // region lifecycle
@@ -418,6 +493,30 @@ class SpotifyPlugin : Plugin() {
 
     private fun rejectPlayback(call: PluginCall, error: Throwable) {
         call.reject(error.message ?: "The Spotify playback command failed.", SpotifyErrors.mapPlaybackError(error))
+    }
+
+    private fun rejectWebApi(call: PluginCall, error: SpotifyException) {
+        call.reject(error.message ?: "The Spotify Web API request failed.", error.code)
+    }
+
+    /** Maps a `GET /me/player/devices` payload onto the `SpotifyDevice` shape. */
+    private fun devicesToJSArray(body: String?): JSArray {
+        val devices = JSArray()
+        if (body.isNullOrBlank()) return devices
+        val items = JSONObject(body).optJSONArray("devices") ?: return devices
+        for (index in 0 until items.length()) {
+            val item = items.optJSONObject(index) ?: continue
+            val device = JSObject()
+            device.put("id", if (item.isNull("id")) JSONObject.NULL else item.optString("id"))
+            device.put("name", item.optString("name"))
+            device.put("type", item.optString("type"))
+            device.put("isActive", item.optBoolean("is_active"))
+            device.put("isPrivateSession", item.optBoolean("is_private_session"))
+            device.put("isRestricted", item.optBoolean("is_restricted"))
+            if (!item.isNull("volume_percent")) device.put("volumePercent", item.optInt("volume_percent"))
+            devices.put(device)
+        }
+        return devices
     }
 
     private fun isSpotifyInstalled(): Boolean = try {

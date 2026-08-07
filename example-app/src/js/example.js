@@ -76,6 +76,16 @@ const actions = {
   repeatOff: () => Spotify.setRepeatMode({ repeatMode: 'off' }),
   volumeHalf: () => Spotify.setVolume({ volume: 0.5 }),
   getPlayerState: () => Spotify.getPlayerState(),
+  getUserCapabilities: () => Spotify.getUserCapabilities(),
+  addToQueue: () => Spotify.addToQueue({ uri: 'spotify:track:4uLU6hMCjMI75M1A2tKUQC' }),
+  getDevices: () => Spotify.getDevices(),
+  transferToFirstOther: async () => {
+    const { devices } = await Spotify.getDevices();
+    const target = devices.find((d) => !d.isActive && d.id && !d.isRestricted);
+    if (!target) throw new Error('no other targetable device found');
+    await Spotify.transferPlayback({ deviceId: target.id, play: true });
+    return { transferredTo: target.name };
+  },
   getImage: async () => {
     const state = await Spotify.getPlayerState();
     if (!state.track?.imageUri) throw new Error('no track image available');

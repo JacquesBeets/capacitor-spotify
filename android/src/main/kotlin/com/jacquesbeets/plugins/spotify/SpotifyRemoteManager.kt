@@ -268,6 +268,21 @@ class SpotifyRemoteManager {
         result.setErrorCallback { onError(it) }
     }
 
+    /**
+     * Reads the account's playback capabilities from the Spotify app;
+     * `canPlayOnDemand` is false for free-tier accounts.
+     */
+    fun getUserCapabilities(onSuccess: (Boolean) -> Unit, onError: (Throwable) -> Unit) {
+        val remote = appRemote
+        if (remote == null || !remote.isConnected) {
+            onError(notConnected())
+            return
+        }
+        val result = remote.userApi.capabilities
+        result.setResultCallback { capabilities -> onSuccess(capabilities.canPlayOnDemand) }
+        result.setErrorCallback { onError(it) }
+    }
+
     // endregion
 
     // region internals

@@ -43,6 +43,30 @@ export class SpotifyWebApi {
     });
   }
 
+  async addToQueue(uri: string): Promise<void> {
+    await this.webApi(`/me/player/queue?uri=${encodeURIComponent(uri)}`, { method: 'POST' });
+  }
+
+  async getDevices(): Promise<unknown[]> {
+    const response = await this.webApi('/me/player/devices', { method: 'GET' });
+    const payload = (await response.json()) as { devices?: unknown[] };
+    return payload.devices ?? [];
+  }
+
+  async transferPlayback(deviceId: string, play: boolean): Promise<void> {
+    await this.webApi('/me/player', {
+      method: 'PUT',
+      body: JSON.stringify({ device_ids: [deviceId], play }),
+    });
+    this.activeDeviceId = deviceId;
+  }
+
+  /** `GET /me`, for subscription inference when the SDK is not connected. */
+  async getProfile(): Promise<{ product?: string }> {
+    const response = await this.webApi('/me', { method: 'GET' });
+    return (await response.json()) as { product?: string };
+  }
+
   /**
    * A Web Playback SDK device is registered but inactive until playback is
    * transferred to it, so the first play has to claim it.

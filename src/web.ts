@@ -10,7 +10,9 @@ import type {
   PlayerState,
   RepeatMode,
   SpotifyCapabilities,
+  SpotifyDevice,
   SpotifyPlugin,
+  UserCapabilities,
 } from './definitions';
 import { SpotifyWebApi } from './web/api';
 import { SpotifyAuth } from './web/auth';
@@ -171,6 +173,45 @@ export class SpotifyWeb extends WebPlugin implements SpotifyPlugin {
     return state;
   }
 
+  async getUserCapabilities(): Promise<UserCapabilities> {
+    this.assertInitialized();
+    // A connected Web Playback SDK player proves Premium — the SDK refuses
+    // non-Premium accounts with account_error before ever reaching `ready`.
+    if (this.player.isConnected()) {
+      return { canPlayOnDemand: true };
+    }
+    const profile = await this.api.getProfile();
+    if (typeof profile.product === 'string') {
+      return { canPlayOnDemand: profile.product === 'premium' };
+    }
+    throw spotifyError(
+      'NOT_SUPPORTED',
+      'The subscription level is unknown: development-mode apps get no product field. Connect the player to prove Premium instead.',
+    );
+  }
+
+  async addToQueue(options: { uri: string }): Promise<void> {
+    this.assertInitialized();
+    if (!options?.uri) {
+      throw spotifyError('UNKNOWN', 'addToQueue() requires a uri.');
+    }
+    await this.api.addToQueue(options.uri);
+  }
+
+  async getDevices(): Promise<{ devices: SpotifyDevice[] }> {
+    this.assertInitialized();
+    const raw = await this.api.getDevices();
+    return { devices: raw.map(deviceToJS) };
+  }
+
+  async transferPlayback(options: { deviceId: string; play?: boolean }): Promise<void> {
+    this.assertInitialized();
+    if (!options?.deviceId) {
+      throw spotifyError('UNKNOWN', 'transferPlayback() requires a deviceId.');
+    }
+    await this.api.transferPlayback(options.deviceId, options.play ?? false);
+  }
+
   async getImage(options: GetImageOptions): Promise<GetImageResult> {
     this.assertInitialized();
     const imageId = options?.imageId;
@@ -209,6 +250,23 @@ export class SpotifyWeb extends WebPlugin implements SpotifyPlugin {
     }
     return deviceId;
   }
+}
+
+/** Normalize a `GET /me/player/devices` entry into the plugin's shape. */
+function deviceToJS(raw: unknown): SpotifyDevice {
+  const device = raw as Record<string, unknown>;
+  const result: SpotifyDevice = {
+    id: typeof device.id === 'string' ? device.id : null,
+    name: String(device.name ?? ''),
+    type: String(device.type ?? ''),
+    isActive: device.is_active === true,
+    isPrivateSession: device.is_private_session === true,
+    isRestricted: device.is_restricted === true,
+  };
+  if (typeof device.volume_percent === 'number') {
+    result.volumePercent = device.volume_percent;
+  }
+  return result;
 }
 
 /**

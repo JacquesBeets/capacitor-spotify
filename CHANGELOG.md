@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 — 2026-08-07
+
+- New `getUserCapabilities()` — detect Free-tier accounts (`canPlayOnDemand`)
+  before playback fails. iOS/Android read it from the Spotify app; web infers
+  it from a connected player (the Web Playback SDK requires Premium).
+- New Web API-backed player helpers on all platforms: `addToQueue({uri})`,
+  `getDevices()`, `transferPlayback({deviceId, play?})` — native platforms get
+  their own authenticated HTTP clients with the same error mapping as web.
+- fix(android): numeric plugin-call options (`positionMs`, `volume`) are now
+  coerced through `Number` — `PluginCall.getLong()` dropped 32-bit values.
+
 ## 0.2.0 — 2026-08-07
 
 - New `getImage({ imageId, width? })` — album art as a directly renderable

@@ -196,6 +196,30 @@ func playerStateToJS(_ state: (any SPTAppRemotePlayerState)?) -> [String: Any] {
     return result
 }
 
+// MARK: - Web API mapping
+
+/// Maps a Web API device object onto the JS `SpotifyDevice` interface.
+///
+/// Spotify reports `id` as `null` for devices that cannot be targeted, and
+/// omits `volume_percent` for devices that do not report a volume.
+func deviceToJS(_ raw: [String: Any]) -> [String: Any] {
+    var result: [String: Any] = [
+        "id": NSNull(),
+        "name": raw["name"] as? String ?? "",
+        "type": raw["type"] as? String ?? "",
+        "isActive": raw["is_active"] as? Bool ?? false,
+        "isPrivateSession": raw["is_private_session"] as? Bool ?? false,
+        "isRestricted": raw["is_restricted"] as? Bool ?? false
+    ]
+    if let id = raw["id"] as? String {
+        result["id"] = id
+    }
+    if let volumePercent = raw["volume_percent"] as? Int {
+        result["volumePercent"] = volumePercent
+    }
+    return result
+}
+
 /// Epoch milliseconds, the unit every timestamp in `definitions.ts` uses.
 func nowMs() -> Int {
     Int(Date().timeIntervalSince1970 * 1000)

@@ -31,7 +31,11 @@ public class SpotifyPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setVolume", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getVolume", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPlayerState", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getImage", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getImage", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getUserCapabilities", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "addToQueue", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getDevices", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "transferPlayback", returnType: CAPPluginReturnPromise)
     ]
 
     private let implementation = Spotify()
@@ -186,6 +190,32 @@ public class SpotifyPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         implementation.getImage(imageId: imageId, width: call.getInt("width") ?? 480) { self.settle(call, $0) }
+    }
+
+    @objc func getUserCapabilities(_ call: CAPPluginCall) {
+        implementation.getUserCapabilities { self.settle(call, $0) }
+    }
+
+    // MARK: - Web API
+
+    @objc func addToQueue(_ call: CAPPluginCall) {
+        guard let uri = call.getString("uri"), !uri.isEmpty else {
+            call.reject("addToQueue() requires a uri.", SpotifyErrorCode.unknown.rawValue)
+            return
+        }
+        implementation.addToQueue(uri: uri) { self.settle(call, $0) }
+    }
+
+    @objc func getDevices(_ call: CAPPluginCall) {
+        implementation.getDevices { self.settle(call, $0) }
+    }
+
+    @objc func transferPlayback(_ call: CAPPluginCall) {
+        guard let deviceId = call.getString("deviceId"), !deviceId.isEmpty else {
+            call.reject("transferPlayback() requires a deviceId.", SpotifyErrorCode.unknown.rawValue)
+            return
+        }
+        implementation.transferPlayback(deviceId: deviceId, play: call.getBool("play", false)) { self.settle(call, $0) }
     }
 
     // MARK: - Unsupported on iOS

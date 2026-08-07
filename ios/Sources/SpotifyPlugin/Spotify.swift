@@ -20,6 +20,7 @@ import SpotifyiOS
     private var config: SpotifyConfig?
     private var auth: SpotifyAuthManager?
     private var remote: SpotifyRemoteManager?
+    private var webApi: SpotifyWebApiClient?
 
     /// What this platform can do — mirrors the JS `SpotifyCapabilities`.
     static let capabilities: [String: Any] = [
@@ -59,6 +60,7 @@ import SpotifyiOS
             self.config = newConfig
             self.auth = auth
             self.remote = remote
+            self.webApi = SpotifyWebApiClient(auth: auth)
             completion(.success(()))
         }
     }
@@ -180,6 +182,50 @@ import SpotifyiOS
         withRemote(completion) { $0.getImage(imageId: imageId, widthPx: width, completion: completion) }
     }
 
+    func getUserCapabilities(completion: @escaping DataResult) {
+        withRemote(completion) { $0.getUserCapabilities(completion: completion) }
+    }
+
+    // MARK: - Web API
+    //
+    // These need a session but no App Remote connection: they act on whatever
+    // Spotify Connect device the account is using, which may be another device
+    // entirely.
+
+    func addToQueue(uri: String, completion: @escaping VoidResult) {
+        withWebApi(completion) { api in
+            let encoded = SpotifyWebApiClient.encodeQueryValue(uri)
+            api.request(method: "POST", path: "/me/player/queue?uri=\(encoded)") { result in
+                completion(result.map { _ in () })
+            }
+        }
+    }
+
+    func getDevices(completion: @escaping DataResult) {
+        withWebApi(completion) { api in
+            api.request(method: "GET", path: "/me/player/devices") { result in
+                completion(result.flatMap(Self.devicesPayload))
+            }
+        }
+    }
+
+    func transferPlayback(deviceId: String, play: Bool, completion: @escaping VoidResult) {
+        withWebApi(completion) { api in
+            api.request(method: "PUT", path: "/me/player", body: ["device_ids": [deviceId], "play": play]) { result in
+                completion(result.map { _ in () })
+            }
+        }
+    }
+
+    private static func devicesPayload(_ data: Data?) -> Result<[String: Any], SpotifyError> {
+        guard let data = data,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return .failure(SpotifyError(.unknown, "Spotify returned an unreadable device list"))
+        }
+        let devices = (json["devices"] as? [[String: Any]]) ?? []
+        return .success(["devices": devices.map(deviceToJS)])
+    }
+
     // MARK: - Unsupported on iOS
 
     func setVolume(completion: @escaping VoidResult) {
@@ -219,6 +265,16 @@ import SpotifyiOS
                 return
             }
             body(remote)
+        }
+    }
+
+    private func withWebApi<T>(_ completion: @escaping (Result<T, SpotifyError>) -> Void, _ body: @escaping (SpotifyWebApiClient) -> Void) {
+        onMain {
+            guard let webApi = self.webApi else {
+                completion(.failure(Self.notInitialized))
+                return
+            }
+            body(webApi)
         }
     }
 

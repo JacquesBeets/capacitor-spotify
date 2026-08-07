@@ -152,6 +152,29 @@ export interface Track {
   isPodcast: boolean;
 }
 
+export interface UserCapabilities {
+  /**
+   * Whether the user's account can play arbitrary content on demand (Premium).
+   * Free-tier accounts get shuffle-based playback and cannot seek or pick
+   * exact tracks — check this before enabling such UI.
+   */
+  canPlayOnDemand: boolean;
+}
+
+export interface SpotifyDevice {
+  /** Connect device ID. Null for devices that cannot be targeted. */
+  id: string | null;
+  name: string;
+  /** Device kind reported by Spotify, e.g. `Computer`, `Smartphone`, `Speaker`. */
+  type: string;
+  isActive: boolean;
+  isPrivateSession: boolean;
+  /** Restricted devices cannot be controlled via the Web API. */
+  isRestricted: boolean;
+  /** Current volume 0–100, when the device reports it. */
+  volumePercent?: number;
+}
+
 export interface GetImageOptions {
   /**
    * The image identifier from {@link Track.imageUri} — a `spotify:image:...`
@@ -325,6 +348,31 @@ export interface SpotifyPlugin {
    * URL without a network round-trip.
    */
   getImage(options: GetImageOptions): Promise<GetImageResult>;
+
+  /**
+   * Whether the account can play content on demand (Premium) — check before
+   * enabling seek/track-pick UI. iOS/Android read this from the Spotify app
+   * (requires a connected player). Web: `true` once the player is connected
+   * (the Web Playback SDK itself requires Premium); when not connected it is
+   * inferred from the user profile where available and otherwise rejects
+   * `NOT_SUPPORTED` (development-mode apps get no subscription field).
+   */
+  getUserCapabilities(): Promise<UserCapabilities>;
+
+  /**
+   * Append a track/episode URI to the playback queue (Web API on all
+   * platforms; requires an active device and Premium).
+   */
+  addToQueue(options: { uri: string }): Promise<void>;
+
+  /** List the user's available Spotify Connect devices (Web API). */
+  getDevices(): Promise<{ devices: SpotifyDevice[] }>;
+
+  /**
+   * Transfer playback to another Connect device (Web API). With
+   * `play: true` playback starts on the target immediately.
+   */
+  transferPlayback(options: { deviceId: string; play?: boolean }): Promise<void>;
 
   /** Fired whenever the player state changes (track, pause, seek, ...). */
   addListener(eventName: 'playerStateChanged', listener: (state: PlayerState) => void): Promise<PluginListenerHandle>;

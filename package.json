@@ -1,6 +1,6 @@
 {
   "name": "capacitor-spotify",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Capacitor plugin for Spotify: native App Remote playback + auth on iOS/Android, Web Playback SDK on web",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",

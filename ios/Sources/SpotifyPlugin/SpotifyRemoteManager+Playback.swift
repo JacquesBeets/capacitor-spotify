@@ -104,6 +104,24 @@ extension SpotifyRemoteManager {
         }
     }
 
+    // MARK: - User
+
+    /// Reads the account's on-demand capability straight from the Spotify app,
+    /// which knows the subscription state without a Web API round trip.
+    func getUserCapabilities(completion: @escaping StateCompletion) {
+        guard appRemote.isConnected, let userAPI = appRemote.userAPI else {
+            completion(.failure(SpotifyError(.notConnected, "Not connected to the Spotify app — call connect() first")))
+            return
+        }
+        userAPI.fetchCapabilities { result, error in
+            guard let capabilities = result as? (any SPTAppRemoteUserCapabilities), error == nil else {
+                completion(.failure(SpotifyError.from(error, fallback: .playbackFailed, prefix: "Could not fetch user capabilities")))
+                return
+            }
+            completion(.success(["canPlayOnDemand": capabilities.canPlayOnDemand]))
+        }
+    }
+
     // MARK: - Helpers
 
     private func requirePlayer(_ completion: @escaping VoidCompletion) -> (any SPTAppRemotePlayerAPI)? {
