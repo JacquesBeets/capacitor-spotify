@@ -3,6 +3,8 @@ import { WebPlugin } from '@capacitor/core';
 import type {
   AccessToken,
   AuthorizeOptions,
+  GetImageOptions,
+  GetImageResult,
   InitializeOptions,
   PlayOptions,
   PlayerState,
@@ -167,6 +169,23 @@ export class SpotifyWeb extends WebPlugin implements SpotifyPlugin {
       );
     }
     return state;
+  }
+
+  async getImage(options: GetImageOptions): Promise<GetImageResult> {
+    this.assertInitialized();
+    const imageId = options?.imageId;
+    if (!imageId) {
+      throw spotifyError('UNKNOWN', 'getImage() requires an imageId.');
+    }
+    // Web player states already carry https URLs; native-style identifiers
+    // map onto Spotify's image CDN.
+    if (imageId.startsWith('https://')) {
+      return { dataUrl: imageId };
+    }
+    if (imageId.startsWith('spotify:image:')) {
+      return { dataUrl: `https://i.scdn.co/image/${imageId.slice('spotify:image:'.length)}` };
+    }
+    throw spotifyError('UNKNOWN', `Unrecognized imageId: ${imageId}`);
   }
 
   private assertInitialized(): void {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — 2026-08-07
+
+- New `getImage({ imageId, width? })` — album art as a directly renderable
+  value: base64 `data:` URI on iOS/Android (fetched through the Spotify app's
+  ImagesApi, works with its cache), CDN URL on web. Pass
+  `track.imageUri` from any player state.
+- fix(web): always request `user-read-email` + `user-read-private` on web —
+  the Web Playback SDK rejects tokens without them ("Invalid token scopes").
+
 ## 0.1.0 — 2026-08-06
 
 Initial release.

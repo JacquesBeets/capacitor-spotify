@@ -1,5 +1,15 @@
 import Foundation
 import SpotifyiOS
+import UIKit
+
+/// Minimal `SPTAppRemoteImageRepresentable` so `getImage` can fetch by raw
+/// image identifier without holding a full track object.
+private final class ImageItem: NSObject, SPTAppRemoteImageRepresentable {
+    let imageIdentifier: String
+    init(_ imageIdentifier: String) {
+        self.imageIdentifier = imageIdentifier
+    }
+}
 
 /// Playback commands, all of them thin wrappers over `SPTAppRemotePlayerAPI`.
 ///
@@ -72,6 +82,25 @@ extension SpotifyRemoteManager {
                 return
             }
             completion(.success(playerStateToJS(state)))
+        }
+    }
+
+    func getImage(imageId: String, widthPx: Int, completion: @escaping StateCompletion) {
+        guard appRemote.isConnected, let images = appRemote.imageAPI else {
+            completion(.failure(SpotifyError(.notConnected, "Not connected to the Spotify app — call connect() first")))
+            return
+        }
+        let size = CGSize(width: widthPx, height: widthPx)
+        images.fetchImage(forItem: ImageItem(imageId), with: size) { result, error in
+            guard let image = result as? UIImage, error == nil else {
+                completion(.failure(SpotifyError.from(error, fallback: .playbackFailed, prefix: "Could not fetch image")))
+                return
+            }
+            guard let data = image.pngData() else {
+                completion(.failure(SpotifyError(.unknown, "Could not encode the fetched image as PNG")))
+                return
+            }
+            completion(.success(["dataUrl": "data:image/png;base64,\(data.base64EncodedString())"]))
         }
     }
 

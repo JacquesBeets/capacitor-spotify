@@ -30,7 +30,8 @@ public class SpotifyPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setRepeatMode", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setVolume", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getVolume", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getPlayerState", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getPlayerState", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getImage", returnType: CAPPluginReturnPromise)
     ]
 
     private let implementation = Spotify()
@@ -177,6 +178,14 @@ public class SpotifyPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func getPlayerState(_ call: CAPPluginCall) {
         implementation.getPlayerState { self.settle(call, $0) }
+    }
+
+    @objc func getImage(_ call: CAPPluginCall) {
+        guard let imageId = call.getString("imageId"), !imageId.isEmpty else {
+            call.reject("getImage() requires an imageId.", SpotifyErrorCode.unknown.rawValue)
+            return
+        }
+        implementation.getImage(imageId: imageId, width: call.getInt("width") ?? 480) { self.settle(call, $0) }
     }
 
     // MARK: - Unsupported on iOS

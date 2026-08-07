@@ -9,6 +9,8 @@ import com.spotify.android.appremote.api.PlayerApi
 import com.spotify.android.appremote.api.SpotifyAppRemote
 import com.spotify.protocol.client.CallResult
 import com.spotify.protocol.client.Subscription
+import com.spotify.protocol.types.Image
+import com.spotify.protocol.types.ImageUri
 import com.spotify.protocol.types.PlayerContext
 import com.spotify.protocol.types.PlayerState
 import com.spotify.protocol.types.VolumeState
@@ -247,6 +249,23 @@ class SpotifyRemoteManager {
         }
         synchronized(pendingVolumeCallbacks) { pendingVolumeCallbacks.add(callback) }
         mainHandler.postDelayed({ flushVolumeCallbacks(lastVolume) }, VOLUME_TIMEOUT_MS)
+    }
+
+    /** Fetches album art through the Spotify app as a [android.graphics.Bitmap]. */
+    fun getImage(
+        imageId: String,
+        dimension: Image.Dimension,
+        onSuccess: (android.graphics.Bitmap) -> Unit,
+        onError: (Throwable) -> Unit,
+    ) {
+        val remote = appRemote
+        if (remote == null || !remote.isConnected) {
+            onError(notConnected())
+            return
+        }
+        val result = remote.imagesApi.getImage(ImageUri(imageId), dimension)
+        result.setResultCallback { bitmap -> onSuccess(bitmap) }
+        result.setErrorCallback { onError(it) }
     }
 
     // endregion

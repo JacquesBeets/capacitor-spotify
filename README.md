@@ -15,6 +15,7 @@ Capacitor 8 plugin for Spotify: one TypeScript API over the **Spotify iOS SDK** 
 | `skipNext` / `skipPrevious` / `seekTo` | ✅ | ✅ | ✅ |
 | `setShuffle` / `setRepeatMode` | ✅ | ✅ | ✅ |
 | `setVolume` / `getVolume` | ❌ `NOT_SUPPORTED` | ✅ / best-effort | ✅ |
+| `getImage` (album art) | ✅ via Spotify app | ✅ via Spotify app | ✅ CDN URL |
 | `playerStateChanged` live events | ✅ | ✅ | ✅ |
 | Audio plays… | in the Spotify app | in the Spotify app | in your web page |
 | Requires Spotify app installed | ✅ | ✅ | — |
@@ -208,6 +209,7 @@ A runnable demo lives in [`example-app/`](./example-app) — bring your own clie
 * [`setVolume(...)`](#setvolume)
 * [`getVolume()`](#getvolume)
 * [`getPlayerState()`](#getplayerstate)
+* [`getImage(...)`](#getimage)
 * [`addListener('playerStateChanged', ...)`](#addlistenerplayerstatechanged-)
 * [`addListener('connectionStateChanged', ...)`](#addlistenerconnectionstatechanged-)
 * [`addListener('authStateChanged', ...)`](#addlistenerauthstatechanged-)
@@ -509,6 +511,26 @@ another device.
 --------------------
 
 
+### getImage(...)
+
+```typescript
+getImage(options: GetImageOptions) => Promise<GetImageResult>
+```
+
+Fetch album art for a track. Pass {@link <a href="#track">Track.imageUri</a>} from a player
+state as `imageId`. iOS/Android fetch through the Spotify app (works with
+its offline cache) and require a connected player; web resolves to a CDN
+URL without a network round-trip.
+
+| Param         | Type                                                        |
+| ------------- | ----------------------------------------------------------- |
+| **`options`** | <code><a href="#getimageoptions">GetImageOptions</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#getimageresult">GetImageResult</a>&gt;</code>
+
+--------------------
+
+
 ### addListener('playerStateChanged', ...)
 
 ```typescript
@@ -683,6 +705,21 @@ removeAllListeners() => Promise<void>
 | **`canRepeatContext`** | <code>boolean</code> |
 
 
+#### GetImageResult
+
+| Prop          | Type                | Description                                                                                                                                       |
+| ------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`dataUrl`** | <code>string</code> | A value directly usable as an `&lt;img src&gt;`: a base64 `data:` URI on iOS/Android (fetched through the Spotify app), an `https://` URL on web. |
+
+
+#### GetImageOptions
+
+| Prop          | Type                | Description                                                                                                                                      | Default          |
+| ------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
+| **`imageId`** | <code>string</code> | The image identifier from {@link <a href="#track">Track.imageUri</a>} — a `spotify:image:...` value on iOS/Android, or an `https://` URL on web. |                  |
+| **`width`**   | <code>number</code> | Desired image width in pixels. Native maps this to the nearest size the Spotify app provides (144/240/360/480/720); web ignores it.              | <code>480</code> |
+
+
 #### PluginListenerHandle
 
 | Prop         | Type                                      |
@@ -794,7 +831,7 @@ Upgrading the iOS SDK: bump the `exact:` pin in `Package.swift` **and** replace 
 
 ## Future work
 
-Web API player helpers (queue, device list, transfer), album-art fetch (`ImagesApi`), `ContentApi` browsing, library add/remove + user capabilities (`UserApi`), user profile, token-swap server recipe, EncryptedSharedPreferences, CI.
+Web API player helpers (queue, device list, transfer), `ContentApi` browsing, library add/remove + user capabilities (`UserApi`), user profile, token-swap server recipe, EncryptedSharedPreferences, CI.
 
 ## License
 

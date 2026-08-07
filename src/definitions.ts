@@ -152,6 +152,29 @@ export interface Track {
   isPodcast: boolean;
 }
 
+export interface GetImageOptions {
+  /**
+   * The image identifier from {@link Track.imageUri} — a `spotify:image:...`
+   * value on iOS/Android, or an `https://` URL on web.
+   */
+  imageId: string;
+  /**
+   * Desired image width in pixels. Native maps this to the nearest size the
+   * Spotify app provides (144/240/360/480/720); web ignores it.
+   *
+   * @default 480
+   */
+  width?: number;
+}
+
+export interface GetImageResult {
+  /**
+   * A value directly usable as an `<img src>`: a base64 `data:` URI on
+   * iOS/Android (fetched through the Spotify app), an `https://` URL on web.
+   */
+  dataUrl: string;
+}
+
 export interface PlaybackRestrictions {
   canSkipNext: boolean;
   canSkipPrevious: boolean;
@@ -294,6 +317,14 @@ export interface SpotifyPlugin {
    * another device.
    */
   getPlayerState(): Promise<PlayerState>;
+
+  /**
+   * Fetch album art for a track. Pass {@link Track.imageUri} from a player
+   * state as `imageId`. iOS/Android fetch through the Spotify app (works with
+   * its offline cache) and require a connected player; web resolves to a CDN
+   * URL without a network round-trip.
+   */
+  getImage(options: GetImageOptions): Promise<GetImageResult>;
 
   /** Fired whenever the player state changes (track, pause, seek, ...). */
   addListener(eventName: 'playerStateChanged', listener: (state: PlayerState) => void): Promise<PluginListenerHandle>;

@@ -176,6 +176,10 @@ import SpotifyiOS
         withRemote(completion) { $0.getPlayerState(completion: completion) }
     }
 
+    func getImage(imageId: String, width: Int, completion: @escaping DataResult) {
+        withRemote(completion) { $0.getImage(imageId: imageId, widthPx: width, completion: completion) }
+    }
+
     // MARK: - Unsupported on iOS
 
     func setVolume(completion: @escaping VoidResult) {

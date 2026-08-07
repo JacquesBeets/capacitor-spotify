@@ -11,6 +11,7 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
+import com.spotify.protocol.types.Image
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import org.json.JSONException
@@ -323,6 +324,40 @@ class SpotifyPlugin : Plugin() {
         runOnMain {
             remoteManager.getPlayerState(
                 { state, playerContext -> call.resolve(PlayerStateMapper.toJSObject(state, playerContext)) },
+                { rejectPlayback(call, it) },
+            )
+        }
+    }
+
+    @PluginMethod
+    fun getImage(call: PluginCall) {
+        if (!requireInitialized(call)) return
+        val imageId = call.getString("imageId")
+        if (imageId.isNullOrEmpty()) {
+            call.reject("getImage() requires an imageId.", SpotifyErrors.UNKNOWN)
+            return
+        }
+        val width = call.getInt("width")
+        val dimension = when {
+            width == null -> Image.Dimension.MEDIUM
+            width <= 144 -> Image.Dimension.THUMBNAIL
+            width <= 240 -> Image.Dimension.X_SMALL
+            width <= 360 -> Image.Dimension.SMALL
+            width <= 480 -> Image.Dimension.MEDIUM
+            else -> Image.Dimension.LARGE
+        }
+        runOnMain {
+            remoteManager.getImage(
+                imageId,
+                dimension,
+                { bitmap ->
+                    executor.execute {
+                        val stream = java.io.ByteArrayOutputStream()
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+                        val base64 = android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
+                        call.resolve(JSObject().put("dataUrl", "data:image/png;base64,$base64"))
+                    }
+                },
                 { rejectPlayback(call, it) },
             )
         }

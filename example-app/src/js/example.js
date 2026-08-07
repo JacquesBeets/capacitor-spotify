@@ -76,6 +76,13 @@ const actions = {
   repeatOff: () => Spotify.setRepeatMode({ repeatMode: 'off' }),
   volumeHalf: () => Spotify.setVolume({ volume: 0.5 }),
   getPlayerState: () => Spotify.getPlayerState(),
+  getImage: async () => {
+    const state = await Spotify.getPlayerState();
+    if (!state.track?.imageUri) throw new Error('no track image available');
+    const { dataUrl } = await Spotify.getImage({ imageId: state.track.imageUri, width: 360 });
+    document.getElementById('albumArt').src = dataUrl;
+    return { bytes: dataUrl.length };
+  },
 };
 
 for (const [name, fn] of Object.entries(actions)) {
