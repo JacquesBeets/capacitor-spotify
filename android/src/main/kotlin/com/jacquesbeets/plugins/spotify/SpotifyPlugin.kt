@@ -256,7 +256,9 @@ class SpotifyPlugin : Plugin() {
     @PluginMethod
     fun seekTo(call: PluginCall) {
         if (!requireInitialized(call)) return
-        val positionMs = call.getLong("positionMs")
+        // The bridge delivers JS numbers as Integer, Long or Double depending on
+        // magnitude — PluginCall.getLong() only matches Long, so coerce manually.
+        val positionMs = (call.data.opt("positionMs") as? Number)?.toLong()
         if (positionMs == null || positionMs < 0) {
             call.reject("seekTo() requires a positionMs of 0 or greater.", SpotifyErrors.UNKNOWN)
             return
@@ -289,7 +291,7 @@ class SpotifyPlugin : Plugin() {
     @PluginMethod
     fun setVolume(call: PluginCall) {
         if (!requireInitialized(call)) return
-        val volume = call.getFloat("volume")
+        val volume = (call.data.opt("volume") as? Number)?.toFloat()
         if (volume == null || volume < 0f || volume > 1f) {
             call.reject("setVolume() requires a volume between 0.0 and 1.0.", SpotifyErrors.UNKNOWN)
             return

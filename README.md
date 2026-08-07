@@ -804,6 +804,10 @@ carry the same `code` property. Switch on `error.code` in your app.
 
 **403 from playback calls** — user isn't in your app's User Management allowlist (development mode, max 5), or isn't Premium.
 
+**`PLAYBACK_FAILED: Cannot seek in song [CANT_PLAY_ON_DEMAND]`** — the account is playing in Free-tier (non-on-demand) mode; Spotify disallows seeking there. Check `state.restrictions.canSeek` and disable your seek UI when false — the other `restrictions` flags work the same way.
+
+**Android: `setVolume` fails with "No IAP endpoint"** — many Spotify app builds don't expose local-device volume to App Remote. Treat volume control on Android as best-effort.
+
 **Android: `FAIL_ON_PROJECT_REPOS` build error** — if your app opts into `dependencyResolutionManagement { repositoriesMode = FAIL_ON_PROJECT_REPOS }`, the plugin can't self-register its bundled Maven repo. Add it to your `settings.gradle` instead:
 
 ```groovy
