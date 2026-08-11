@@ -15,7 +15,7 @@ Pod::Spec.new do |s|
   # via `:path`, where `prepare_command` does not run, so the binary must be
   # present in the checked-in tree.
   s.vendored_frameworks = 'ios/SpotifyiOS.xcframework'
-  s.ios.deployment_target = '15.0'
+  s.ios.deployment_target = '14.0'
   s.dependency 'Capacitor'
   s.swift_version = '5.1'
 end

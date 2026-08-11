@@ -1,6 +1,6 @@
 # capacitor-spotify
 
-Capacitor 8 plugin for Spotify: one TypeScript API over the **Spotify iOS SDK** (App Remote), the **Spotify Android SDK** (App Remote + auth library), and the **Web Playback SDK**.
+Capacitor plugin for Spotify (Capacitor 7 and 8): one TypeScript API over the **Spotify iOS SDK** (App Remote), the **Spotify Android SDK** (App Remote + auth library), and the **Web Playback SDK**.
 
 - **iOS / Android** — controls playback in the installed Spotify app via App Remote: play/pause/skip/seek/shuffle/repeat, live player-state events, OAuth (PKCE) tokens for your own Web API calls.
 - **Web** — streams inside the browser via the Web Playback SDK (your page becomes a Spotify Connect device).
@@ -25,7 +25,7 @@ Capacitor 8 plugin for Spotify: one TypeScript API over the **Spotify iOS SDK** 
 
 ## Requirements
 
-- Capacitor 8 (iOS 15+, Android minSdk 24)
+- Capacitor 7 or 8 (iOS 14+; Android minSdk 23 on Capacitor 7, 24 on Capacitor 8)
 - **Your own Spotify app** (client ID) from the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) — see setup below
 - iOS/Android: the Spotify app installed on the device, user logged in
 - Web: a real browser with DRM (Widevine/FairPlay) support and a Premium account. **The Web Playback SDK does not work inside the Capacitor webview** — the native implementations exist for exactly that reason. Use `getCapabilities().webPlaybackViable` to detect support.

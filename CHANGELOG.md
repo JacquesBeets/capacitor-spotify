@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 — 2026-08-11
+
+- **Capacitor 7 support** (alongside 8): peer dependency widened to
+  `@capacitor/core >=7.0.0`, capacitor-swift-pm accepted as `7.0.0..<9.0.0`,
+  AGP classpath lowered to 8.7.2, `androidx.core-ktx` fallback lowered to
+  1.16.0 (1.17.0 needs compileSdk 36), iOS deployment floor lowered to 14.0
+  (SPM + podspec). Verified against a Capacitor 7.6.8 app on both platforms.
+- fix(ios): SPM package/product renamed `CapacitorSpotify` →
+  `JacquesbeetsCapacitorSpotify` to match the scoped npm name. **0.3.0 does
+  not resolve in SPM-based apps** — the Capacitor CLI derives the product
+  name from the npm package name; CocoaPods installs were unaffected.
+
 ## 0.3.0 — 2026-08-07
 
 - New `getUserCapabilities()` — detect Free-tier accounts (`canPlayOnDemand`)
