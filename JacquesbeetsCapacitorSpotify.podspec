@@ -2,8 +2,12 @@ require 'json'
 
 package = JSON.parse(File.read(File.join(__dir__, 'package.json')))
 
+# Filename and s.name must both stay in sync with the npm package name:
+# the Capacitor CLI pascal-cases "@jacquesbeets/capacitor-spotify" into
+# pod 'JacquesbeetsCapacitorSpotify', :path => ... in the consumer Podfile,
+# and CocoaPods resolves that to <name>.podspec inside the package.
 Pod::Spec.new do |s|
-  s.name = 'CapacitorSpotify'
+  s.name = 'JacquesbeetsCapacitorSpotify'
   s.version = package['version']
   s.summary = package['description']
   s.license = package['license']

@@ -1,6 +1,6 @@
 {
   "name": "@jacquesbeets/capacitor-spotify",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Capacitor plugin for Spotify: native App Remote playback + auth on iOS/Android, Web Playback SDK on web",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
@@ -15,7 +15,7 @@
     "ios/Tests",
     "ios/SpotifyiOS.xcframework",
     "Package.swift",
-    "CapacitorSpotify.podspec",
+    "JacquesbeetsCapacitorSpotify.podspec",
     "SPOTIFY_SDK_LICENSES/"
   ],
   "publishConfig": {
@@ -42,7 +42,7 @@
   ],
   "scripts": {
     "verify": "npm run verify:ios && npm run verify:android && npm run verify:web",
-    "verify:ios": "xcodebuild -scheme CapacitorSpotify -destination generic/platform=iOS",
+    "verify:ios": "xcodebuild -scheme JacquesbeetsCapacitorSpotify -destination generic/platform=iOS",
     "verify:android": "cd android && ./gradlew clean build test && cd ..",
     "verify:web": "npm run build",
     "lint": "npm run eslint && npm run prettier -- --check && npm run swiftlint -- lint",

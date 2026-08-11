@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1 — 2026-08-11
+
+- fix(ios): podspec renamed `CapacitorSpotify.podspec` →
+  `JacquesbeetsCapacitorSpotify.podspec` (with matching `s.name`). The
+  Capacitor CLI pascal-cases the npm package name into the consumer Podfile,
+  so **CocoaPods apps could not install 0.3.0 or 0.4.0** ("No podspec found
+  for `JacquesbeetsCapacitorSpotify`") — 0.4.0's changelog wrongly claimed
+  CocoaPods was unaffected. Same root cause as 0.4.0's SPM product rename.
+
 ## 0.4.0 — 2026-08-11
 
 - **Capacitor 7 support** (alongside 8): peer dependency widened to
@@ -10,7 +19,8 @@
 - fix(ios): SPM package/product renamed `CapacitorSpotify` →
   `JacquesbeetsCapacitorSpotify` to match the scoped npm name. **0.3.0 does
   not resolve in SPM-based apps** — the Capacitor CLI derives the product
-  name from the npm package name; CocoaPods installs were unaffected.
+  name from the npm package name. (CocoaPods has the same issue via the
+  podspec name; that half was missed here and fixed in 0.4.1.)
 
 ## 0.3.0 — 2026-08-07
 
