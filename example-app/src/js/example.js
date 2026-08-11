@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core';
-import { Spotify } from 'capacitor-spotify';
+import { Spotify } from '@jacquesbeets/capacitor-spotify';
 
 import { CLIENT_ID, REDIRECT_URI_NATIVE, REDIRECT_URI_WEB } from './config.js';
 

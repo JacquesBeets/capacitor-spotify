@@ -1,5 +1,5 @@
 {
-  "name": "capacitor-spotify",
+  "name": "@jacquesbeets/capacitor-spotify",
   "version": "0.3.0",
   "description": "Capacitor plugin for Spotify: native App Remote playback + auth on iOS/Android, Web Playback SDK on web",
   "main": "dist/plugin.cjs.js",
@@ -18,6 +18,9 @@
     "CapacitorSpotify.podspec",
     "SPOTIFY_SDK_LICENSES/"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "author": "Jacques Beets <jacques.beets@basebone.com>",
   "license": "MIT",
   "repository": {

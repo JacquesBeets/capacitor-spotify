@@ -35,21 +35,19 @@ Capacitor 8 plugin for Spotify: one TypeScript API over the **Spotify iOS SDK** 
 
 ## Install
 
-Until the package is published to npm, install from GitHub:
+```bash
+npm install @jacquesbeets/capacitor-spotify
+npx cap sync
+```
+
+Or straight from GitHub (e.g. to try an unreleased commit):
 
 ```bash
 npm install https://github.com/JacquesBeets/capacitor-spotify.git
 npx cap sync
 ```
 
-> Installing from a git URL runs the plugin's build (`prepublishOnly`) only when packed. If `dist/` is missing after a git install, run `npm --prefix node_modules/capacitor-spotify run build` once, or install from a packed tarball (`npm pack` in a plugin checkout → `npm install <tarball>`).
-
-Once published to npm it will be:
-
-```bash
-npm install capacitor-spotify
-npx cap sync
-```
+> Installing from a git URL runs the plugin's build (`prepublishOnly`) only when packed. If `dist/` is missing after a git install, run `npm --prefix node_modules/@jacquesbeets/capacitor-spotify run build` once, or install from a packed tarball (`npm pack` in a plugin checkout → `npm install <tarball>`).
 
 ## Spotify Developer Dashboard setup
 
@@ -127,7 +125,7 @@ No install steps. At runtime the plugin injects `https://sdk.scdn.co/spotify-pla
 ## Usage
 
 ```typescript
-import { Spotify } from 'capacitor-spotify';
+import { Spotify } from '@jacquesbeets/capacitor-spotify';
 
 // 1. Initialize once at startup. On web this also completes a pending
 //    OAuth redirect, so call it before anything else.
@@ -902,7 +900,7 @@ carry the same `code` property. Switch on `error.code` in your app.
 ```groovy
 dependencyResolutionManagement {
   repositories {
-    maven { url "$rootDir/../node_modules/capacitor-spotify/android/repo" }
+    maven { url "$rootDir/../node_modules/@jacquesbeets/capacitor-spotify/android/repo" }
   }
 }
 ```

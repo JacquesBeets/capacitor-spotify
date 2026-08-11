@@ -2,5 +2,5 @@
 include ':capacitor-android'
 project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
 
-include ':capacitor-spotify'
-project(':capacitor-spotify').projectDir = new File('../../android')
+include ':jacquesbeets-capacitor-spotify'
+project(':jacquesbeets-capacitor-spotify').projectDir = new File('../../android')
