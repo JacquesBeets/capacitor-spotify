@@ -37,6 +37,8 @@ async function setup() {
       clientId: CLIENT_ID,
       redirectUri: REDIRECT_URI,
       playerName: 'Capacitor Spotify Example',
+      // Manual test bed: log the iOS SDK's own connect diagnostics too.
+      debug: true,
     }),
   );
 
@@ -61,6 +63,7 @@ const actions = {
   getAccessToken: () => Spotify.getAccessToken(),
   logout: () => Spotify.logout(),
   isSpotifyAppInstalled: () => Spotify.isSpotifyAppInstalled(),
+  diagnoseAccess: () => Spotify.diagnoseAccess(),
   connect: () => Spotify.connect({ playUri: '' }),
   disconnect: () => Spotify.disconnect(),
   play: () => Spotify.play({ uri: document.getElementById('uriInput').value || undefined }),

@@ -20,6 +20,10 @@ object SpotifyErrors {
     const val AUTH_FAILED = "AUTH_FAILED"
     const val TOKEN_REFRESH_FAILED = "TOKEN_REFRESH_FAILED"
     const val SPOTIFY_APP_NOT_INSTALLED = "SPOTIFY_APP_NOT_INSTALLED"
+
+    /** iOS only: `authorizeAndPlayURI` would not start an authorization attempt. */
+    const val AUTHORIZE_AND_PLAY_REFUSED = "AUTHORIZE_AND_PLAY_REFUSED"
+
     const val NOT_CONNECTED = "NOT_CONNECTED"
     const val CONNECTION_FAILED = "CONNECTION_FAILED"
     const val PREMIUM_REQUIRED = "PREMIUM_REQUIRED"
@@ -32,7 +36,16 @@ object SpotifyErrors {
     const val RATE_LIMITED = "RATE_LIMITED"
     const val UNKNOWN = "UNKNOWN"
 
-    /** Maps an App Remote connection failure onto a `SpotifyErrorCode`. */
+    /**
+     * Maps an App Remote connection failure onto a `SpotifyErrorCode`.
+     *
+     * [CouldNotFindSpotifyApp] means "no *usable* Spotify app", not simply "not
+     * installed": the SDK's locator walks `com.spotify.music`, `.canary` and
+     * `.partners`, and accepts one only when it has a launch intent (so the
+     * `<queries>` entry must survive manifest merging on API 30+) *and* its
+     * signing certificate matches Spotify's release fingerprints. A re-signed
+     * or sideloaded Spotify build is therefore reported as missing.
+     */
     fun mapConnectionError(throwable: Throwable): String = when (throwable) {
         is SpotifyException -> throwable.code
         is CouldNotFindSpotifyApp -> SPOTIFY_APP_NOT_INSTALLED

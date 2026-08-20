@@ -35,6 +35,17 @@ final class SpotifyWebApiClient {
         perform(method: method, path: path, body: body, mayRetry: true, completion: completion)
     }
 
+    /// Calls `path` and hands back the raw status and body instead of mapping
+    /// them onto a `SpotifyError`.
+    ///
+    /// `diagnoseAccess()` needs it that way: *which* `403` Spotify sends is the
+    /// whole diagnosis, and mapping throws that text away. A `401` still earns
+    /// one forced-refresh retry, so a merely stale token is not reported as a
+    /// problem with the app.
+    func probe(path: String, completion: @escaping (SpotifyAccessDiagnosis) -> Void) {
+        probe(path: path, mayRetry: true, completion: completion)
+    }
+
     /// `encodeURIComponent` semantics: Spotify URIs are full of `:`, which
     /// `.urlQueryAllowed` would leave unescaped.
     static func encodeQueryValue(_ value: String) -> String {
@@ -108,6 +119,50 @@ final class SpotifyWebApiClient {
         return request
     }
 
+    private func probe(path: String, mayRetry: Bool, completion: @escaping (SpotifyAccessDiagnosis) -> Void) {
+        guard let url = URL(string: Self.baseUrl + path) else {
+            completion(.failed(SpotifyError(.unknown, "Invalid Spotify Web API path '\(path)'")))
+            return
+        }
+        guard let auth = auth else {
+            completion(.failed(SpotifyError(.notInitialized, "Spotify plugin is not initialized — call initialize() first")))
+            return
+        }
+
+        auth.getAccessToken(forceRefresh: !mayRetry) { [weak self] result in
+            guard let self = self else { return }
+            switch result {
+            case .failure(let error):
+                completion(.failed(error))
+            case .success(let session):
+                guard let request = Self.urlRequest(url: url, method: "GET", body: nil, token: session.accessToken) else {
+                    completion(.failed(SpotifyError(.unknown, "Could not encode the Spotify Web API request")))
+                    return
+                }
+                self.urlSession.dataTask(with: request) { data, response, error in
+                    DispatchQueue.main.async {
+                        if let error = error {
+                            completion(.failed(SpotifyError.from(error, fallback: .offline, prefix: "The Spotify Web API is unreachable")))
+                            return
+                        }
+                        guard let http = response as? HTTPURLResponse else {
+                            completion(.failed(SpotifyError(.unknown, "The Spotify Web API returned no response")))
+                            return
+                        }
+                        if http.statusCode == 401, mayRetry {
+                            self.probe(path: path, mayRetry: false, completion: completion)
+                            return
+                        }
+                        // Whole body, not `snippet`: a truncated `/me` payload
+                        // is not parseable JSON. The diagnosis trims what it
+                        // shows the caller.
+                        completion(.from(status: http.statusCode, body: Self.bodyText(from: data)))
+                    }
+                }.resume()
+            }
+        }
+    }
+
     private func send(_ request: URLRequest, mayRetry: Bool, completion: @escaping (Outcome) -> Void) {
         urlSession.dataTask(with: request) { data, response, error in
             let outcome = Self.outcome(data: data, response: response, error: error, mayRetry: mayRetry)
@@ -158,6 +213,11 @@ final class SpotifyWebApiClient {
         default:
             return SpotifyError(.playbackFailed, "The Spotify Web API request failed (HTTP \(status))\(suffix)")
         }
+    }
+
+    private static func bodyText(from data: Data?) -> String {
+        guard let data = data, let text = String(data: data, encoding: .utf8) else { return "" }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func snippet(from data: Data?) -> String {

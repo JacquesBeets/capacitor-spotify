@@ -22,6 +22,7 @@ export type SpotifyErrorCode =
   | 'AUTH_FAILED'
   | 'TOKEN_REFRESH_FAILED'
   | 'SPOTIFY_APP_NOT_INSTALLED'
+  | 'AUTHORIZE_AND_PLAY_REFUSED'
   | 'NOT_CONNECTED'
   | 'CONNECTION_FAILED'
   | 'PREMIUM_REQUIRED'
@@ -74,6 +75,19 @@ export interface InitializeOptions {
    * plugin refreshes tokens itself via PKCE.
    */
   tokenRefreshUrl?: string;
+  /**
+   * iOS only: verbose diagnostics. Raises the Spotify SDK's own log level
+   * (`SPTAppRemote`) from `error` to `debug` and logs the plugin's connect
+   * sequence to the unified system log (subsystem
+   * `com.jacquesbeets.capacitor-spotify`).
+   *
+   * Turn this on when a `connect()` failure needs explaining — the SDK's log
+   * is where the underlying transport error appears. Connection failures are
+   * logged even with `debug: false`.
+   *
+   * @default false
+   */
+  debug?: boolean;
 }
 
 export interface AuthorizeOptions {
@@ -161,6 +175,42 @@ export interface UserCapabilities {
   canPlayOnDemand: boolean;
 }
 
+/**
+ * What Spotify itself says about your app and the signed-in account, as
+ * returned by {@link SpotifyPlugin.diagnoseAccess}.
+ */
+export interface AccessDiagnosis {
+  /** True when `GET /v1/me` returned 200 — app and account can use the Web API. */
+  ok: boolean;
+  /**
+   * One-line reading of the probe, always present. When Spotify refused the
+   * request this names the likely cause in plain words, including the case its
+   * own message gets wrong (see {@link AccessDiagnosis.spotifyMessage}).
+   */
+  message: string;
+  /** The code a normal call would reject with for this condition. Absent when `ok`. */
+  code?: SpotifyErrorCode;
+  /** HTTP status of the probe, when Spotify answered at all. */
+  httpStatus?: number;
+  /**
+   * Spotify's own message, verbatim (truncated at 500 characters) — the reason
+   * for running this at all. The two app-level `403`s are indistinguishable
+   * from the native side but say different things here:
+   *
+   * - `"Active premium subscription required for the owner of the app…"` — the
+   *   account that owns your dashboard app has no active Premium subscription.
+   *   This blocks every user of the app, whatever their own tier.
+   * - `"Check settings on https://developer.spotify.com/dashboard, the user may
+   *   not be registered."` — sent to non-owner accounts for *either* cause, so
+   *   it is not proof of a User Management problem.
+   */
+  spotifyMessage?: string;
+  /** The account's Spotify user ID, when the probe succeeded. */
+  userId?: string;
+  /** `premium` or `free`, when the granted scopes let Spotify report it. */
+  product?: string;
+}
+
 export interface SpotifyDevice {
   /** Connect device ID. Null for devices that cannot be targeted. */
   id: string | null;
@@ -234,7 +284,13 @@ export interface ConnectionStateChange {
   /** Web only: the Web Playback SDK device ID (from the SDK `ready` event). */
   deviceId?: string;
   reason?: 'connect' | 'disconnect' | 'appBackgrounded' | 'error';
-  error?: { code: SpotifyErrorCode; message: string };
+  /**
+   * `cause` (iOS) carries the underlying SDK/transport failure verbatim,
+   * domain and code included — e.g.
+   * `com.spotify.app-remote.transport Code=-2000 "Stream error."`. It is also
+   * appended to `message`, which is all a rejected promise can carry.
+   */
+  error?: { code: SpotifyErrorCode; message: string; cause?: string };
 }
 
 export interface AuthStateChange {
@@ -278,6 +334,17 @@ export interface SpotifyPlugin {
 
   /**
    * Whether the Spotify app is installed on this device. Always false on web.
+   *
+   * A hint for UI, not a connect precondition — neither platform's answer
+   * predicts what App Remote will accept:
+   *
+   * - iOS probes `canOpenURL("spotify:")`, which is also false when your
+   *   Info.plist omits `spotify` from `LSApplicationQueriesSchemes`.
+   * - Android looks for the `com.spotify.music` package. App Remote itself also
+   *   accepts `com.spotify.music.canary` / `.partners` (so this can read false
+   *   while `connect()` works) and additionally requires Spotify's own signing
+   *   certificate (so this can read true while `connect()` rejects a re-signed
+   *   build as `SPOTIFY_APP_NOT_INSTALLED`).
    */
   isSpotifyAppInstalled(): Promise<{ installed: boolean }>;
 
@@ -358,6 +425,21 @@ export interface SpotifyPlugin {
    * `NOT_SUPPORTED` (development-mode apps get no subscription field).
    */
   getUserCapabilities(): Promise<UserCapabilities>;
+
+  /**
+   * Ask Spotify whether this app and account may use the Web API at all, by
+   * probing `GET /v1/me` (no scope or tier gate) and reporting its verdict.
+   *
+   * **Never rejects** — every outcome, including "not initialized" and "no
+   * session", comes back as an {@link AccessDiagnosis}, so it is safe to call
+   * from a `catch` block and log in one line.
+   *
+   * Reach for this when `connect()` or a playback call fails for no visible
+   * reason. Authorization succeeds even when the app is blocked (PKCE checks
+   * neither the owner's subscription nor the development-mode allowlist), so a
+   * token in hand is not evidence of access — this is.
+   */
+  diagnoseAccess(): Promise<AccessDiagnosis>;
 
   /**
    * Append a track/episode URI to the playback queue (Web API on all

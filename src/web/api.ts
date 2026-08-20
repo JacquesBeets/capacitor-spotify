@@ -1,7 +1,8 @@
-import type { RepeatMode } from '../definitions';
+import type { AccessDiagnosis, RepeatMode } from '../definitions';
 
 import type { SpotifyAuth } from './auth';
-import { errorMessage, spotifyError } from './errors';
+import { diagnosisFailed, diagnosisFrom } from './diagnosis';
+import { errorCode, errorMessage, spotifyError } from './errors';
 
 const API_BASE = 'https://api.spotify.com/v1';
 
@@ -61,6 +62,21 @@ export class SpotifyWebApi {
     this.activeDeviceId = deviceId;
   }
 
+  /**
+   * `GET /me`, reported rather than mapped: *which* `403` Spotify sends is the
+   * whole diagnosis, and `toApiError` throws that text away. Never throws — a
+   * missing session or a dead network is itself part of the answer.
+   */
+  async probeAccess(): Promise<AccessDiagnosis> {
+    let response: Response;
+    try {
+      response = await this.rawGet('/me');
+    } catch (error) {
+      return diagnosisFailed(errorCode(error) ?? 'UNKNOWN', errorMessage(error));
+    }
+    return diagnosisFrom(response.status, await readWholeBody(response));
+  }
+
   /** `GET /me`, for subscription inference when the SDK is not connected. */
   async getProfile(): Promise<{ product?: string }> {
     const response = await this.webApi('/me', { method: 'GET' });
@@ -80,6 +96,29 @@ export class SpotifyWebApi {
       body: JSON.stringify({ device_ids: [deviceId], play: true }),
     });
     this.activeDeviceId = deviceId;
+  }
+
+  /**
+   * Authorized `GET` that hands back the response whatever its status, so the
+   * caller can read Spotify's own message. A `401` still earns one
+   * forced-refresh retry, so a merely stale token is not reported as a problem
+   * with the app.
+   */
+  private async rawGet(path: string, retry = true): Promise<Response> {
+    const token = await this.auth.getAccessToken({ forceRefresh: !retry });
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}${path}`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token.accessToken}` },
+      });
+    } catch (error) {
+      throw spotifyError('OFFLINE', `The Spotify Web API is unreachable: ${errorMessage(error)}`);
+    }
+    if (response.status === 401 && retry) {
+      return this.rawGet(path, false);
+    }
+    return response;
   }
 
   /**
@@ -144,6 +183,18 @@ async function toApiError(response: Response): Promise<Error> {
     }
     default:
       return spotifyError('UNKNOWN', `The Spotify Web API request failed (HTTP ${response.status})${suffix}`);
+  }
+}
+
+/**
+ * Unlike `readBody`, keeps the whole payload: a truncated `/me` body is not
+ * parseable JSON, and the diagnosis trims what it shows the caller.
+ */
+async function readWholeBody(response: Response): Promise<string> {
+  try {
+    return (await response.text()).trim();
+  } catch {
+    return '';
   }
 }
 

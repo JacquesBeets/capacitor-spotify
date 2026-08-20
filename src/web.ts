@@ -1,6 +1,7 @@
 import { WebPlugin } from '@capacitor/core';
 
 import type {
+  AccessDiagnosis,
   AccessToken,
   AuthorizeOptions,
   GetImageOptions,
@@ -16,6 +17,7 @@ import type {
 } from './definitions';
 import { SpotifyWebApi } from './web/api';
 import { SpotifyAuth } from './web/auth';
+import { diagnosisFailed } from './web/diagnosis';
 import { spotifyError } from './web/errors';
 import { SpotifyWebPlayer } from './web/player';
 
@@ -188,6 +190,13 @@ export class SpotifyWeb extends WebPlugin implements SpotifyPlugin {
       'NOT_SUPPORTED',
       'The subscription level is unknown: development-mode apps get no product field. Connect the player to prove Premium instead.',
     );
+  }
+
+  async diagnoseAccess(): Promise<AccessDiagnosis> {
+    if (!this.initialized) {
+      return diagnosisFailed('NOT_INITIALIZED', 'Call initialize() before using the Spotify plugin.');
+    }
+    return this.api.probeAccess();
   }
 
   async addToQueue(options: { uri: string }): Promise<void> {

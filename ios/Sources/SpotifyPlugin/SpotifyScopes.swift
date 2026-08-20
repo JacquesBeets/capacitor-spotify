@@ -9,6 +9,9 @@ struct SpotifyConfig: Equatable {
     let scopes: [String]
     let tokenSwapUrl: URL?
     let tokenRefreshUrl: URL?
+    /// Verbose diagnostics: raises the `SPTAppRemote` log level to `.debug` and
+    /// turns on the plugin's own connect trail.
+    let debug: Bool
 
     /// Matches the documented default in `src/definitions.ts`.
     static let defaultScopes = [

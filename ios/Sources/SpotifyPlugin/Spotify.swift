@@ -46,6 +46,7 @@ import SpotifyiOS
 
             self.remote?.disconnect()
 
+            SpotifyLog.isDebugEnabled = newConfig.debug
             let configuration = SPTConfiguration(clientID: newConfig.clientId, redirectURL: newConfig.redirectUrl)
             configuration.tokenSwapURL = newConfig.tokenSwapUrl
             configuration.tokenRefreshURL = newConfig.tokenRefreshUrl
@@ -53,7 +54,7 @@ import SpotifyiOS
             let auth = SpotifyAuthManager(config: newConfig, configuration: configuration)
             auth.onAuthStateChanged = { [weak self] payload in self?.onAuthStateChanged?(payload) }
 
-            let remote = SpotifyRemoteManager(configuration: configuration, auth: auth)
+            let remote = SpotifyRemoteManager(configuration: configuration, auth: auth, debug: newConfig.debug)
             remote.onConnectionStateChanged = { [weak self] payload in self?.onConnectionStateChanged?(payload) }
             remote.onPlayerStateChanged = { [weak self] payload in self?.onPlayerStateChanged?(payload) }
 
@@ -214,6 +215,18 @@ import SpotifyiOS
             api.request(method: "PUT", path: "/me/player", body: ["device_ids": [deviceId], "play": play]) { result in
                 completion(result.map { _ in () })
             }
+        }
+    }
+
+    /// Never fails: "not initialized" is itself a diagnosis, so it is reported
+    /// in the payload rather than as a rejection.
+    func diagnoseAccess(completion: @escaping DataResult) {
+        onMain {
+            guard let webApi = self.webApi else {
+                completion(.success(SpotifyAccessDiagnosis.failed(Self.notInitialized).asJS))
+                return
+            }
+            webApi.probe(path: "/me") { completion(.success($0.asJS)) }
         }
     }
 
