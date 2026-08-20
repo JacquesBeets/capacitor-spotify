@@ -335,10 +335,16 @@ export interface SpotifyPlugin {
   /**
    * Whether the Spotify app is installed on this device. Always false on web.
    *
-   * iOS answers with a `canOpenURL("spotify:")` probe, which is also false
-   * when your Info.plist omits `spotify` from `LSApplicationQueriesSchemes` —
-   * treat false there as "not reachable" rather than proof of a missing app.
-   * Android queries the package manager directly.
+   * A hint for UI, not a connect precondition — neither platform's answer
+   * predicts what App Remote will accept:
+   *
+   * - iOS probes `canOpenURL("spotify:")`, which is also false when your
+   *   Info.plist omits `spotify` from `LSApplicationQueriesSchemes`.
+   * - Android looks for the `com.spotify.music` package. App Remote itself also
+   *   accepts `com.spotify.music.canary` / `.partners` (so this can read false
+   *   while `connect()` works) and additionally requires Spotify's own signing
+   *   certificate (so this can read true while `connect()` rejects a re-signed
+   *   build as `SPOTIFY_APP_NOT_INSTALLED`).
    */
   isSpotifyAppInstalled(): Promise<{ installed: boolean }>;
 

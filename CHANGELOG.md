@@ -33,6 +33,13 @@ because the plugin said something confidently wrong.
   `com.jacquesbeets.capacitor-spotify` subsystem. The SDK log level was
   hard-coded to `none`; it now defaults to `error`, and connection failures are
   logged whether or not `debug` is on.
+- docs(android): `SPOTIFY_APP_NOT_INSTALLED` is documented as "no *usable*
+  Spotify app" there too. App Remote's locator (read out of the bundled
+  `app-remote` 0.8.0 AAR) accepts `com.spotify.music`, `.canary` and
+  `.partners`, requires a launch intent — hence the `<queries>` entry on API
+  30+ — *and* checks the signing certificate against Spotify's release
+  fingerprints, so a re-signed build reports as missing. Also spells out that
+  `isSpotifyAppInstalled()` can disagree with App Remote in both directions.
 - docs: `LSApplicationQueriesSchemes` must declare **both** `spotify` and
   `spotify-action` — the SDK opens
   `spotify-action://authorize?response_type=token` for `authorizeAndPlayURI`,

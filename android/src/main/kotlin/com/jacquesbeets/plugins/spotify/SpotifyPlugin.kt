@@ -537,6 +537,19 @@ class SpotifyPlugin : Plugin() {
         return devices
     }
 
+    /**
+     * Whether the mainline Spotify app is installed.
+     *
+     * Narrower than App Remote's own check in both directions, so it is not a
+     * prediction of whether `connect()` will work:
+     *
+     * - only [SPOTIFY_PACKAGE] is looked for, while App Remote also accepts
+     *   `com.spotify.music.canary` and `com.spotify.music.partners`;
+     * - no signing-certificate check, which App Remote does perform.
+     *
+     * It also needs the `<queries>` package-visibility entry on API 30+ (the
+     * plugin's manifest ships it, and manifest merger folds it into the app).
+     */
     private fun isSpotifyInstalled(): Boolean = try {
         context.packageManager.getPackageInfo(SPOTIFY_PACKAGE, 0)
         true
@@ -602,6 +615,7 @@ class SpotifyPlugin : Plugin() {
     // endregion
 
     private companion object {
+        /** Mainline Spotify. App Remote additionally accepts `.canary` and `.partners`. */
         const val SPOTIFY_PACKAGE = "com.spotify.music"
 
         const val EVENT_PLAYER_STATE = "playerStateChanged"

@@ -115,7 +115,12 @@ Since `com.spotify.android:auth` 5.0.0 the redirect receiver must be declared in
 
 Notes:
 - The Spotify App Remote AAR is not on Maven Central; this plugin **vendors it** and registers a local Maven repository automatically — no Gradle changes needed in your app. (Exception: see [Troubleshooting](#troubleshooting) if your app uses `FAIL_ON_PROJECT_REPOS`.)
-- The plugin's manifest already ships the `<queries>` entry needed to see the Spotify app on Android 11+.
+- The plugin's manifest already ships the `<queries>` entry needed to see the Spotify app on Android 11+ (API 30+). Keep it: without package visibility, App Remote cannot find Spotify and every connect fails with `SPOTIFY_APP_NOT_INSTALLED`. If your build strips it (`tools:node="remove"`, an aggressive manifest-merger rule), declare it yourself:
+  ```xml
+  <queries>
+    <package android:name="com.spotify.music" />
+  </queries>
+  ```
 
 ## Web setup
 
@@ -313,10 +318,16 @@ isSpotifyAppInstalled() => Promise<{ installed: boolean; }>
 
 Whether the Spotify app is installed on this device. Always false on web.
 
-iOS answers with a `canOpenURL("spotify:")` probe, which is also false
-when your Info.plist omits `spotify` from `LSApplicationQueriesSchemes` —
-treat false there as "not reachable" rather than proof of a missing app.
-Android queries the package manager directly.
+A hint for UI, not a connect precondition — neither platform's answer
+predicts what App Remote will accept:
+
+- iOS probes `canOpenURL("spotify:")`, which is also false when your
+  Info.plist omits `spotify` from `LSApplicationQueriesSchemes`.
+- Android looks for the `com.spotify.music` package. App Remote itself also
+  accepts `com.spotify.music.canary` / `.partners` (so this can read false
+  while `connect()` works) and additionally requires Spotify's own signing
+  certificate (so this can read true while `connect()` rejects a re-signed
+  build as `SPOTIFY_APP_NOT_INSTALLED`).
 
 **Returns:** <code>Promise&lt;{ installed: boolean; }&gt;</code>
 
@@ -915,7 +926,7 @@ carry the same `code` property. Switch on `error.code` in your app.
 | `AUTH_CANCELLED` | User dismissed the login/consent flow |
 | `AUTH_FAILED` | Authorization failed (bad client ID, redirect mismatch, ...) |
 | `TOKEN_REFRESH_FAILED` | Refresh grant failed; session was cleared |
-| `SPOTIFY_APP_NOT_INSTALLED` | iOS/Android: Spotify app missing — on iOS also raised when `spotify` is not declared in `LSApplicationQueriesSchemes`, since the two are indistinguishable to `canOpenURL` |
+| `SPOTIFY_APP_NOT_INSTALLED` | No *usable* Spotify app, which is wider than "not installed" on both platforms. iOS: also raised when `spotify` is missing from `LSApplicationQueriesSchemes`, since `canOpenURL` cannot tell the two apart. Android: App Remote also rejects a Spotify install whose signing certificate is not one of Spotify's (re-signed/sideloaded builds), and needs package visibility — see [Troubleshooting](#troubleshooting) |
 | `AUTHORIZE_AND_PLAY_REFUSED` | iOS: the Spotify app is reachable but would not start an authorization attempt (`authorizeAndPlayURI` returned `NO`) — see [Troubleshooting](#troubleshooting) |
 | `NOT_CONNECTED` | Player method called before `connect()` succeeded |
 | `CONNECTION_FAILED` | Could not connect (on web often missing DRM/webview) |
@@ -956,7 +967,15 @@ console.log(d.ok, d.code, d.message, d.spotifyMessage);
 xcrun devicectl device console --device <udid> | grep -i spotify   # or Console.app
 ```
 
-Connection failures are logged even without `debug`, and the underlying SDK error is carried into the rejection message and into `connectionStateChanged`'s `error.cause`, e.g. `com.spotify.app-remote.transport Code=-2000 "Stream error."`. A `-2000` transport error together with `authorizeAndPlayURI` returning `NO` is the signature of the dashboard user-registration problem above.
+Connection failures are logged even without `debug`, and the underlying SDK error is carried into the rejection message and into `connectionStateChanged`'s `error.cause`, e.g. `com.spotify.app-remote.transport Code=-2000 "Stream error."`. A `-2000` transport error together with `authorizeAndPlayURI` returning `NO` is the signature of the app-level `403`s above — the owner's subscription or user registration. `diagnoseAccess()` tells you which.
+
+**Android: `SPOTIFY_APP_NOT_INSTALLED` with Spotify plainly installed** — App Remote's own locator (verified in the bundled `app-remote` 0.8.0 AAR) accepts an install only when it clears three checks, and reports `CouldNotFindSpotifyApp` — which this plugin maps to `SPOTIFY_APP_NOT_INSTALLED` — when none does:
+
+1. **Package name** is `com.spotify.music`, `com.spotify.music.canary` or `com.spotify.music.partners`. Any other package — Spotify Lite, for instance — is not in that list.
+2. **A launch intent exists**, which needs the `<queries>` package-visibility entry on API 30+ — see [Android setup](#android-setup).
+3. **The signing certificate matches** one of Spotify's release fingerprints. A re-signed, patched or sideloaded Spotify APK fails here, however well it plays music on its own.
+
+`isSpotifyAppInstalled()` is a plain `getPackageInfo("com.spotify.music")` probe and checks none of 1's alternatives or 3, so it can disagree with App Remote in both directions: `true` while `connect()` reports the app as missing (signature mismatch), or `false` while App Remote connects happily (canary/partners build). Treat it as a hint for UI, not as a connect precondition.
 
 **`INVALID_CLIENT: Insecure redirect URI`** — your redirect URI isn't registered (exact match!), or the dashboard rejected a custom scheme. Try an all-lowercase, app-specific scheme with a host part (`myapp://spotify-callback`), or use App Links / Universal Links.
 
