@@ -174,12 +174,17 @@ final class SpotifyRemoteManager: NSObject, SPTAppRemoteDelegate, SPTAppRemotePl
                     + "authorizeAndPlayURI. Declare both \"spotify\" and \"spotify-action\"."
             )
         }
+        // Spotify refusing the app itself is by far the likeliest cause here,
+        // and it is invisible from this side: both of the Web API's 403s below
+        // produce exactly this refusal plus a -2000 transport error, and one of
+        // them ("the user may not be registered") names the wrong thing.
         return SpotifyError(
             .authorizeAndPlayRefused,
             "The Spotify app refused to start an authorization attempt (authorizeAndPlayURI returned NO while the "
-                + "app is installed and reachable). Check that a user is logged into the Spotify app, that this "
-                + "redirect URI is registered for your client ID, and that the account is on your app's User "
-                + "Management allowlist in the Spotify dashboard (development mode)."
+                + "app is installed and reachable). Likeliest first: the owner of your Spotify dashboard app has no "
+                + "active Premium subscription; the account is not in that app's User Management allowlist "
+                + "(development mode); no user is logged into the Spotify app; this redirect URI is not registered "
+                + "for your client ID. GET /v1/me with your access token returns Spotify's own reason in its 403 body."
         )
     }
 

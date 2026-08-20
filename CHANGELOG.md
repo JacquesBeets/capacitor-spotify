@@ -12,9 +12,10 @@ because the plugin said something confidently wrong.
   is now diagnosed: `SPOTIFY_APP_NOT_INSTALLED` only when `canOpenURL`
   ("spotify:") fails — naming the `LSApplicationQueriesSchemes` entry as the
   other possible cause — and otherwise the new **`AUTHORIZE_AND_PLAY_REFUSED`**
-  code, which calls out a missing `spotify-action` scheme, a logged-out Spotify
-  app, an unregistered redirect URI or a dashboard User Management allowlist
-  miss.
+  code, which lists the real candidates most-likely-first: the dashboard app
+  **owner** holding no active Premium subscription, the account missing from
+  User Management on a development-mode app, a missing `spotify-action` scheme,
+  a logged-out Spotify app, an unregistered redirect URI.
 - fix(ios): `didFailConnectionAttemptWithError` no longer discards `error`. It
   is logged, and it is carried into the eventual rejection message and into
   `connectionStateChanged`'s new `error.cause` — so the JS side sees
@@ -29,8 +30,13 @@ because the plugin said something confidently wrong.
   `spotify-action` — the SDK opens
   `spotify-action://authorize?response_type=token` for `authorizeAndPlayURI`,
   and iOS refuses undeclared schemes. Troubleshooting gained the
-  `AUTHORIZE_AND_PLAY_REFUSED` checklist and the development-mode
-  user-registration signature (`403` on `/v1/me` while authorization succeeds).
+  `AUTHORIZE_AND_PLAY_REFUSED` checklist and the two app-level `403`s that
+  produce it — the owner's lapsed Premium subscription (`"Active premium
+  subscription required for the owner of the app"`) and development-mode user
+  registration (`"the user may not be registered"`, which non-owner accounts
+  also receive for the owner-subscription case, pointing at the wrong setting).
+  Both leave PKCE authorization succeeding, so a token is not evidence of
+  access; `GET /v1/me` is the discriminator.
 
 ## 0.4.1 — 2026-08-11
 

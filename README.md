@@ -31,7 +31,7 @@ Capacitor plugin for Spotify (Capacitor 7 and 8): one TypeScript API over the **
 - Web: a real browser with DRM (Widevine/FairPlay) support and a Premium account. **The Web Playback SDK does not work inside the Capacitor webview** — the native implementations exist for exactly that reason. Use `getCapabilities().webPlaybackViable` to detect support.
 
 > [!IMPORTANT]
-> **Spotify Development Mode limits (since Feb/Mar 2026):** the account owning your Spotify app must hold an active **Premium** subscription, and only **5 users** (allowlisted in *User Management*) can use the app. Higher limits require [extended quota mode](https://developer.spotify.com/documentation/web-api/concepts/quota-modes), which Spotify currently grants only to registered organizations with an active service of ≥250k MAU. This is a Spotify platform policy, not a plugin limitation — plan your product accordingly.
+> **Spotify Development Mode limits (since Feb/Mar 2026):** the account owning your Spotify app must hold an active **Premium** subscription, and only **5 users** (allowlisted in *User Management*) can use the app. Higher limits require [extended quota mode](https://developer.spotify.com/documentation/web-api/concepts/quota-modes), which Spotify currently grants only to registered organizations with an active service of ≥250k MAU. This is a Spotify platform policy, not a plugin limitation — plan your product accordingly. Both limits fail *silently at the Web API*, not at login: authorization succeeds and every subsequent call returns `403`. See [Troubleshooting](#troubleshooting) for the exact messages and the native signature they produce.
 
 ## Install
 
@@ -894,10 +894,13 @@ carry the same `code` property. Switch on `error.code` in your app.
 
 **iOS: `connect()` fails with `AUTHORIZE_AND_PLAY_REFUSED`** — the Spotify app is installed and reachable, but refused to even start an authorization attempt. `authorizeAndPlayURI` returning `NO` means only "the Spotify app is installed *and* an authorization attempt can be made" (`SPTAppRemote.h`) — it is not an install check, and it comes back `NO` within milliseconds and with no app switch. Work through, in order:
 
-1. `spotify-action` is missing from `LSApplicationQueriesSchemes` (the plugin names this case in the message — see [iOS setup](#ios-setup)).
-2. No user is logged into the Spotify app on the device.
-3. The redirect URI passed to `initialize()` is not registered, character for character, for this client ID.
-4. The account is not in **User Management** on your Spotify dashboard. In development mode this blocks every Web API call with `403 "the user may not be registered"` — including `/v1/me`, which has no scope or tier gate — while PKCE authorization still succeeds, because authorization does not check the allowlist. `getAccessToken()` returning a token is therefore *not* evidence that the account can use your app.
+1. **The owner of your dashboard app has no active Premium subscription.** This is the most common cause and the hardest to see: it blocks *every* Web API call for *every* user of the app, whatever their own tier. Signed in as the owner, `/v1/me` returns `403 "Active premium subscription required for the owner of the app. When the subscription status changes, it can take a few hours before requests are allowed again."` Note the delay — fixing the subscription is not instant.
+2. **The account is not in User Management** on a development-mode app. Non-owner accounts get a *different and misleading* 403 for both conditions: `403 "Check settings on https://developer.spotify.com/dashboard, the user may not be registered."` That message points at User Management even when the real problem is (1), so check the owner's subscription before touching the allowlist.
+3. `spotify-action` is missing from `LSApplicationQueriesSchemes` (the plugin names this case explicitly in the message — see [iOS setup](#ios-setup)).
+4. No user is logged into the Spotify app on the device.
+5. The redirect URI passed to `initialize()` is not registered, character for character, for this client ID.
+
+Causes 1 and 2 are indistinguishable from the native side — both produce this refusal *and* `com.spotify.app-remote.transport Code=-2000 "Stream error."` — so read Spotify's own message: call `GET https://api.spotify.com/v1/me` with a token from `getAccessToken()` and look at the 403 body. `/v1/me` has no scope or tier gate, so a 403 there is about the app, not the request. PKCE authorization checks none of this, which is why `authorize()` succeeds and everything afterwards fails: **a token in hand is not evidence that the account can use your app.**
 
 **iOS: diagnosing any other `connect()` failure** — pass `debug: true` to `initialize()`. That raises the Spotify SDK's own log level (`SPTAppRemote`, otherwise `error`) and adds the plugin's connect trail, both under the `com.jacquesbeets.capacitor-spotify` subsystem:
 
@@ -913,7 +916,7 @@ Connection failures are logged even without `debug`, and the underlying SDK erro
 
 **Web: `authorize()` seems to do nothing** — it navigates the page to Spotify. Make sure you call `initialize()` on startup so the redirect back completes the flow, and that the page URL you started from is the registered redirect URI.
 
-**403 from playback calls** — user isn't in your app's User Management allowlist (development mode, max 5), or isn't Premium. A quick discriminator: `GET /v1/me` has no scope or tier gate, so a 403 there ("the user may not be registered") is the allowlist, not the subscription.
+**403 from playback calls** — three different conditions, and Spotify's message is the only way to tell them apart: the **app owner's** Premium subscription lapsed (blocks everyone, whatever their tier), the user isn't in your app's User Management allowlist (development mode, max 5), or the user isn't Premium for a call that needs it. Probe `GET /v1/me` — no scope or tier gate, so a 403 there is about the app — and read the body. `"the user may not be registered"` is returned to non-owner accounts for the owner-subscription case too, so treat it as "app-level problem", not specifically as an allowlist miss.
 
 **`PLAYBACK_FAILED: Cannot seek in song [CANT_PLAY_ON_DEMAND]`** — the account is playing in Free-tier (non-on-demand) mode; Spotify disallows seeking there. Check `state.restrictions.canSeek` and disable your seek UI when false — the other `restrictions` flags work the same way.
 
