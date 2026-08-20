@@ -68,10 +68,11 @@ npx cap sync
 Add to your app's `Info.plist`:
 
 ```xml
-<!-- Lets the plugin detect + launch the Spotify app -->
+<!-- Lets the plugin detect + launch the Spotify app. Both entries are required. -->
 <key>LSApplicationQueriesSchemes</key>
 <array>
   <string>spotify</string>
+  <string>spotify-action</string>
 </array>
 
 <!-- Your OAuth redirect scheme (the part before ://) -->
@@ -89,6 +90,7 @@ Add to your app's `Info.plist`:
 ```
 
 Notes:
+- **Declare both schemes.** `spotify` backs `isSpotifyAppInstalled()`; `spotify-action` is what the Spotify SDK actually opens for `authorizeAndPlayURI` (`spotify-action://authorize?response_type=token`). iOS returns `false` from `canOpenURL` for any scheme the app has not declared, so a missing `spotify-action` makes `connect()` fail with `AUTHORIZE_AND_PLAY_REFUSED` — the plugin says so explicitly in the error message.
 - The plugin handles the redirect callback itself (via Capacitor's URL-open events) — no AppDelegate changes needed.
 - The Spotify iOS SDK requires the Spotify app to be *actively playing* for a plain connect. When it isn't, `connect({ playUri })` falls back to `authorizeAndPlayURI`, which **briefly app-switches to Spotify**, starts playback, and returns. Pass `playUri: ''` to resume the user's last context.
 - iOS cannot control the Spotify app's volume — `setVolume()`/`getVolume()` reject with `NOT_SUPPORTED`.
@@ -308,6 +310,11 @@ isSpotifyAppInstalled() => Promise<{ installed: boolean; }>
 ```
 
 Whether the Spotify app is installed on this device. Always false on web.
+
+iOS answers with a `canOpenURL("spotify:")` probe, which is also false
+when your Info.plist omits `spotify` from `LSApplicationQueriesSchemes` —
+treat false there as "not reachable" rather than proof of a missing app.
+Android queries the package manager directly.
 
 **Returns:** <code>Promise&lt;{ installed: boolean; }&gt;</code>
 
@@ -666,14 +673,15 @@ removeAllListeners() => Promise<void>
 
 #### InitializeOptions
 
-| Prop                  | Type                  | Description                                                                                                                                                                                                                                                                       | Default                                                                                                                                   |
-| --------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **`clientId`**        | <code>string</code>   | Your Spotify app's client ID from the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard). Every consumer of this plugin must register their own Spotify app.                                                                                                  |                                                                                                                                           |
-| **`redirectUri`**     | <code>string</code>   | OAuth redirect URI. Must exactly match a Redirect URI registered in the Spotify Developer Dashboard. Native: a custom scheme such as `myapp://spotify-callback`. Web: an `https://` page of your app (or `http://127.0.0.1:port` in dev — `localhost` is not allowed by Spotify). |                                                                                                                                           |
-| **`scopes`**          | <code>string[]</code> | OAuth scopes to request during {@link SpotifyPlugin.authorize}.                                                                                                                                                                                                                   | <code>["app-remote-control", "streaming", "user-modify-playback-state", "user-read-playback-state", "user-read-currently-playing"]</code> |
-| **`playerName`**      | <code>string</code>   | Web only: name of the Spotify Connect device created by the Web Playback SDK, shown in Spotify's device picker.                                                                                                                                                                   | <code>"Capacitor App"</code>                                                                                                              |
-| **`tokenSwapUrl`**    | <code>string</code>   | iOS only: URL of your token-swap service. Optional — by default the plugin uses Authorization Code + PKCE and needs no server.                                                                                                                                                    |                                                                                                                                           |
-| **`tokenRefreshUrl`** | <code>string</code>   | iOS only: URL of your token-refresh service. Optional — by default the plugin refreshes tokens itself via PKCE.                                                                                                                                                                   |                                                                                                                                           |
+| Prop                  | Type                  | Description                                                                                                                                                                                                                                                                                                                                                                                                          | Default                                                                                                                                   |
+| --------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **`clientId`**        | <code>string</code>   | Your Spotify app's client ID from the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard). Every consumer of this plugin must register their own Spotify app.                                                                                                                                                                                                                                     |                                                                                                                                           |
+| **`redirectUri`**     | <code>string</code>   | OAuth redirect URI. Must exactly match a Redirect URI registered in the Spotify Developer Dashboard. Native: a custom scheme such as `myapp://spotify-callback`. Web: an `https://` page of your app (or `http://127.0.0.1:port` in dev — `localhost` is not allowed by Spotify).                                                                                                                                    |                                                                                                                                           |
+| **`scopes`**          | <code>string[]</code> | OAuth scopes to request during {@link SpotifyPlugin.authorize}.                                                                                                                                                                                                                                                                                                                                                      | <code>["app-remote-control", "streaming", "user-modify-playback-state", "user-read-playback-state", "user-read-currently-playing"]</code> |
+| **`playerName`**      | <code>string</code>   | Web only: name of the Spotify Connect device created by the Web Playback SDK, shown in Spotify's device picker.                                                                                                                                                                                                                                                                                                      | <code>"Capacitor App"</code>                                                                                                              |
+| **`tokenSwapUrl`**    | <code>string</code>   | iOS only: URL of your token-swap service. Optional — by default the plugin uses Authorization Code + PKCE and needs no server.                                                                                                                                                                                                                                                                                       |                                                                                                                                           |
+| **`tokenRefreshUrl`** | <code>string</code>   | iOS only: URL of your token-refresh service. Optional — by default the plugin refreshes tokens itself via PKCE.                                                                                                                                                                                                                                                                                                      |                                                                                                                                           |
+| **`debug`**           | <code>boolean</code>  | iOS only: verbose diagnostics. Raises the Spotify SDK's own log level (`SPTAppRemote`) from `error` to `debug` and logs the plugin's connect sequence to the unified system log (subsystem `com.jacquesbeets.capacitor-spotify`). Turn this on when a `connect()` failure needs explaining — the SDK's log is where the underlying transport error appears. Connection failures are logged even with `debug: false`. | <code>false</code>                                                                                                                        |
 
 
 #### AccessToken
@@ -816,12 +824,12 @@ removeAllListeners() => Promise<void>
 
 #### ConnectionStateChange
 
-| Prop            | Type                                                                                      | Description                                                            |
-| --------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| **`connected`** | <code>boolean</code>                                                                      |                                                                        |
-| **`deviceId`**  | <code>string</code>                                                                       | Web only: the Web Playback SDK device ID (from the SDK `ready` event). |
-| **`reason`**    | <code>'error' \| 'connect' \| 'disconnect' \| 'appBackgrounded'</code>                    |                                                                        |
-| **`error`**     | <code>{ code: <a href="#spotifyerrorcode">SpotifyErrorCode</a>; message: string; }</code> |                                                                        |
+| Prop            | Type                                                                                                      | Description                                                                                                                                                                                                                                      |
+| --------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`connected`** | <code>boolean</code>                                                                                      |                                                                                                                                                                                                                                                  |
+| **`deviceId`**  | <code>string</code>                                                                                       | Web only: the Web Playback SDK device ID (from the SDK `ready` event).                                                                                                                                                                           |
+| **`reason`**    | <code>'error' \| 'connect' \| 'disconnect' \| 'appBackgrounded'</code>                                    |                                                                                                                                                                                                                                                  |
+| **`error`**     | <code>{ code: <a href="#spotifyerrorcode">SpotifyErrorCode</a>; message: string; cause?: string; }</code> | `cause` (iOS) carries the underlying SDK/transport failure verbatim, domain and code included — e.g. `com.spotify.app-remote.transport Code=-2000 "Stream error."`. It is also appended to `message`, which is all a rejected promise can carry. |
 
 
 #### AuthStateChange
@@ -853,7 +861,7 @@ Error codes attached to rejected calls.
 Native rejections arrive as `{ message, code }`; on web, thrown errors
 carry the same `code` property. Switch on `error.code` in your app.
 
-<code>'NOT_INITIALIZED' | 'NOT_AUTHENTICATED' | 'AUTH_CANCELLED' | 'AUTH_FAILED' | 'TOKEN_REFRESH_FAILED' | 'SPOTIFY_APP_NOT_INSTALLED' | 'NOT_CONNECTED' | 'CONNECTION_FAILED' | 'PREMIUM_REQUIRED' | 'USER_NOT_AUTHORIZED' | 'UNSUPPORTED_VERSION' | 'OFFLINE' | 'NOT_ACTIVE_DEVICE' | 'NOT_SUPPORTED' | 'PLAYBACK_FAILED' | 'RATE_LIMITED' | 'UNKNOWN'</code>
+<code>'NOT_INITIALIZED' | 'NOT_AUTHENTICATED' | 'AUTH_CANCELLED' | 'AUTH_FAILED' | 'TOKEN_REFRESH_FAILED' | 'SPOTIFY_APP_NOT_INSTALLED' | 'AUTHORIZE_AND_PLAY_REFUSED' | 'NOT_CONNECTED' | 'CONNECTION_FAILED' | 'PREMIUM_REQUIRED' | 'USER_NOT_AUTHORIZED' | 'UNSUPPORTED_VERSION' | 'OFFLINE' | 'NOT_ACTIVE_DEVICE' | 'NOT_SUPPORTED' | 'PLAYBACK_FAILED' | 'RATE_LIMITED' | 'UNKNOWN'</code>
 
 </docgen-api>
 
@@ -866,7 +874,8 @@ carry the same `code` property. Switch on `error.code` in your app.
 | `AUTH_CANCELLED` | User dismissed the login/consent flow |
 | `AUTH_FAILED` | Authorization failed (bad client ID, redirect mismatch, ...) |
 | `TOKEN_REFRESH_FAILED` | Refresh grant failed; session was cleared |
-| `SPOTIFY_APP_NOT_INSTALLED` | iOS/Android: Spotify app missing |
+| `SPOTIFY_APP_NOT_INSTALLED` | iOS/Android: Spotify app missing — on iOS also raised when `spotify` is not declared in `LSApplicationQueriesSchemes`, since the two are indistinguishable to `canOpenURL` |
+| `AUTHORIZE_AND_PLAY_REFUSED` | iOS: the Spotify app is reachable but would not start an authorization attempt (`authorizeAndPlayURI` returned `NO`) — see [Troubleshooting](#troubleshooting) |
 | `NOT_CONNECTED` | Player method called before `connect()` succeeded |
 | `CONNECTION_FAILED` | Could not connect (on web often missing DRM/webview) |
 | `PREMIUM_REQUIRED` | Operation needs a Premium account |
@@ -883,13 +892,28 @@ carry the same `code` property. Switch on `error.code` in your app.
 
 **App Remote won't connect (iOS/Android)** — the Spotify app must be installed, logged in, and have been launched at least once. On iOS it must be *playing* for a plain connect; use `connect({ playUri: '' })` to let the plugin wake it (expect a brief app switch). On Android, connection errors surface as typed codes (`SPOTIFY_APP_NOT_INSTALLED`, `OFFLINE`, ...).
 
+**iOS: `connect()` fails with `AUTHORIZE_AND_PLAY_REFUSED`** — the Spotify app is installed and reachable, but refused to even start an authorization attempt. `authorizeAndPlayURI` returning `NO` means only "the Spotify app is installed *and* an authorization attempt can be made" (`SPTAppRemote.h`) — it is not an install check, and it comes back `NO` within milliseconds and with no app switch. Work through, in order:
+
+1. `spotify-action` is missing from `LSApplicationQueriesSchemes` (the plugin names this case in the message — see [iOS setup](#ios-setup)).
+2. No user is logged into the Spotify app on the device.
+3. The redirect URI passed to `initialize()` is not registered, character for character, for this client ID.
+4. The account is not in **User Management** on your Spotify dashboard. In development mode this blocks every Web API call with `403 "the user may not be registered"` — including `/v1/me`, which has no scope or tier gate — while PKCE authorization still succeeds, because authorization does not check the allowlist. `getAccessToken()` returning a token is therefore *not* evidence that the account can use your app.
+
+**iOS: diagnosing any other `connect()` failure** — pass `debug: true` to `initialize()`. That raises the Spotify SDK's own log level (`SPTAppRemote`, otherwise `error`) and adds the plugin's connect trail, both under the `com.jacquesbeets.capacitor-spotify` subsystem:
+
+```bash
+xcrun devicectl device console --device <udid> | grep -i spotify   # or Console.app
+```
+
+Connection failures are logged even without `debug`, and the underlying SDK error is carried into the rejection message and into `connectionStateChanged`'s `error.cause`, e.g. `com.spotify.app-remote.transport Code=-2000 "Stream error."`. A `-2000` transport error together with `authorizeAndPlayURI` returning `NO` is the signature of the dashboard user-registration problem above.
+
 **`INVALID_CLIENT: Insecure redirect URI`** — your redirect URI isn't registered (exact match!), or the dashboard rejected a custom scheme. Try an all-lowercase, app-specific scheme with a host part (`myapp://spotify-callback`), or use App Links / Universal Links.
 
 **Web: `CONNECTION_FAILED` immediately** — the environment has no EME/DRM (Capacitor webview, Chromium without Widevine, some privacy browsers). Check `getCapabilities().webPlaybackViable`. Ad blockers can also block `sdk.scdn.co`.
 
 **Web: `authorize()` seems to do nothing** — it navigates the page to Spotify. Make sure you call `initialize()` on startup so the redirect back completes the flow, and that the page URL you started from is the registered redirect URI.
 
-**403 from playback calls** — user isn't in your app's User Management allowlist (development mode, max 5), or isn't Premium.
+**403 from playback calls** — user isn't in your app's User Management allowlist (development mode, max 5), or isn't Premium. A quick discriminator: `GET /v1/me` has no scope or tier gate, so a 403 there ("the user may not be registered") is the allowlist, not the subscription.
 
 **`PLAYBACK_FAILED: Cannot seek in song [CANT_PLAY_ON_DEMAND]`** — the account is playing in Free-tier (non-on-demand) mode; Spotify disallows seeking there. Check `state.restrictions.canSeek` and disable your seek UI when false — the other `restrictions` flags work the same way.
 

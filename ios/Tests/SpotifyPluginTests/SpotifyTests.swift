@@ -10,7 +10,7 @@ final class SpotifyTests: XCTestCase {
     func testErrorCodesMatchTypeScriptUnion() {
         let expected = [
             "NOT_INITIALIZED", "NOT_AUTHENTICATED", "AUTH_CANCELLED", "AUTH_FAILED",
-            "TOKEN_REFRESH_FAILED", "SPOTIFY_APP_NOT_INSTALLED", "NOT_CONNECTED",
+            "TOKEN_REFRESH_FAILED", "SPOTIFY_APP_NOT_INSTALLED", "AUTHORIZE_AND_PLAY_REFUSED", "NOT_CONNECTED",
             "CONNECTION_FAILED", "PREMIUM_REQUIRED", "USER_NOT_AUTHORIZED",
             "UNSUPPORTED_VERSION", "OFFLINE", "NOT_ACTIVE_DEVICE", "NOT_SUPPORTED",
             "PLAYBACK_FAILED", "RATE_LIMITED", "UNKNOWN"
@@ -24,6 +24,49 @@ final class SpotifyTests: XCTestCase {
         let error = SpotifyError(.notConnected, "nope")
         XCTAssertEqual(error.asJS["code"] as? String, "NOT_CONNECTED")
         XCTAssertEqual(error.asJS["message"] as? String, "nope")
+        XCTAssertNil(error.asJS["cause"], "no cause means no key, not a null")
+    }
+
+    /// The transport error behind a failure is the whole diagnosis, so it has
+    /// to reach JS: `cause` for listeners, and `message` for a rejected promise
+    /// (which carries nothing else across the bridge).
+    func testSpotifyErrorKeepsTheUnderlyingFailure() {
+        let underlying = NSError(
+            domain: "com.spotify.app-remote.transport",
+            code: -2000,
+            userInfo: [NSLocalizedDescriptionKey: "Stream error."]
+        )
+        XCTAssertEqual(
+            SpotifyError.describe(underlying),
+            "com.spotify.app-remote.transport Code=-2000 \"Stream error.\""
+        )
+        XCTAssertNil(SpotifyError.describe(nil))
+
+        let mapped = SpotifyError.from(underlying, fallback: .connectionFailed, prefix: "Could not connect")
+        XCTAssertEqual(mapped.code, .connectionFailed)
+        XCTAssertEqual(mapped.message, "Could not connect: Stream error.")
+        XCTAssertEqual(mapped.cause, "com.spotify.app-remote.transport Code=-2000 \"Stream error.\"")
+        XCTAssertEqual(mapped.asJS["cause"] as? String, mapped.cause)
+
+        let blamed = SpotifyError(.authorizeAndPlayRefused, "Refused").withUnderlying("Code=-2000")
+        XCTAssertEqual(blamed.code, .authorizeAndPlayRefused)
+        XCTAssertEqual(blamed.cause, "Code=-2000")
+        XCTAssertTrue(blamed.message.contains("Refused"))
+        XCTAssertTrue(blamed.message.contains("Code=-2000"))
+        // Already-blamed errors stay put rather than growing a second copy.
+        XCTAssertEqual(blamed.withUnderlying("Code=-2000").message, blamed.message)
+    }
+
+    /// A timeout carries no `NSError`, and must not claim one.
+    func testSpotifyErrorFromNilKeepsThePrefixOnly() {
+        let error = SpotifyError.from(nil, fallback: .connectionFailed, prefix: "Could not connect")
+        XCTAssertEqual(error.message, "Could not connect")
+        XCTAssertNil(error.cause)
+    }
+
+    func testOfflineTransportErrorsAreClassifiedAsOffline() {
+        let offline = NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet)
+        XCTAssertEqual(SpotifyError.from(offline, fallback: .connectionFailed).code, .offline)
     }
 
     /// A nil player state still has to produce the full `PlayerState` shape so

@@ -22,6 +22,7 @@ export type SpotifyErrorCode =
   | 'AUTH_FAILED'
   | 'TOKEN_REFRESH_FAILED'
   | 'SPOTIFY_APP_NOT_INSTALLED'
+  | 'AUTHORIZE_AND_PLAY_REFUSED'
   | 'NOT_CONNECTED'
   | 'CONNECTION_FAILED'
   | 'PREMIUM_REQUIRED'
@@ -74,6 +75,19 @@ export interface InitializeOptions {
    * plugin refreshes tokens itself via PKCE.
    */
   tokenRefreshUrl?: string;
+  /**
+   * iOS only: verbose diagnostics. Raises the Spotify SDK's own log level
+   * (`SPTAppRemote`) from `error` to `debug` and logs the plugin's connect
+   * sequence to the unified system log (subsystem
+   * `com.jacquesbeets.capacitor-spotify`).
+   *
+   * Turn this on when a `connect()` failure needs explaining — the SDK's log
+   * is where the underlying transport error appears. Connection failures are
+   * logged even with `debug: false`.
+   *
+   * @default false
+   */
+  debug?: boolean;
 }
 
 export interface AuthorizeOptions {
@@ -234,7 +248,13 @@ export interface ConnectionStateChange {
   /** Web only: the Web Playback SDK device ID (from the SDK `ready` event). */
   deviceId?: string;
   reason?: 'connect' | 'disconnect' | 'appBackgrounded' | 'error';
-  error?: { code: SpotifyErrorCode; message: string };
+  /**
+   * `cause` (iOS) carries the underlying SDK/transport failure verbatim,
+   * domain and code included — e.g.
+   * `com.spotify.app-remote.transport Code=-2000 "Stream error."`. It is also
+   * appended to `message`, which is all a rejected promise can carry.
+   */
+  error?: { code: SpotifyErrorCode; message: string; cause?: string };
 }
 
 export interface AuthStateChange {
@@ -278,6 +298,11 @@ export interface SpotifyPlugin {
 
   /**
    * Whether the Spotify app is installed on this device. Always false on web.
+   *
+   * iOS answers with a `canOpenURL("spotify:")` probe, which is also false
+   * when your Info.plist omits `spotify` from `LSApplicationQueriesSchemes` —
+   * treat false there as "not reachable" rather than proof of a missing app.
+   * Android queries the package manager directly.
    */
   isSpotifyAppInstalled(): Promise<{ installed: boolean }>;
 

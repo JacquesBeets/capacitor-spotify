@@ -24,6 +24,11 @@ final class SpotifyRemoteManager: NSObject, SPTAppRemoteDelegate, SPTAppRemotePl
     private var pendingConnect: [VoidCompletion] = []
     private var connectTimeout: DispatchWorkItem?
     private var pendingPlayUri: String?
+    /// Description of the error the *first* connect attempt failed with, kept
+    /// so the eventual rejection can name it. Without this the fallback's
+    /// verdict is all the JS side ever sees, and the transport error that
+    /// actually explains the failure is lost.
+    private var firstAttemptError: String?
     /// True once `authorizeAndPlayURI` has been used for the current attempt —
     /// stops us bouncing the user to Spotify twice.
     private var didFallBackToAuthorizeAndPlay = false
@@ -38,8 +43,10 @@ final class SpotifyRemoteManager: NSObject, SPTAppRemoteDelegate, SPTAppRemotePl
 
     var isConnected: Bool { appRemote.isConnected }
 
-    init(configuration: SPTConfiguration, auth: SpotifyAuthManager) {
-        self.appRemote = SPTAppRemote(configuration: configuration, logLevel: .none)
+    init(configuration: SPTConfiguration, auth: SpotifyAuthManager, debug: Bool = false) {
+        // `.error` rather than `.none`: the SDK's own diagnostics are the only
+        // window into the App Remote handshake. `debug` opens it fully.
+        self.appRemote = SPTAppRemote(configuration: configuration, logLevel: debug ? .debug : .error)
         self.auth = auth
         super.init()
         appRemote.delegate = self
@@ -63,14 +70,17 @@ final class SpotifyRemoteManager: NSObject, SPTAppRemoteDelegate, SPTAppRemotePl
 
         pendingPlayUri = playUri
         didFallBackToAuthorizeAndPlay = false
+        firstAttemptError = nil
         startConnectTimeout()
 
         if let token = auth?.usableAccessToken {
+            SpotifyLog.debug("Connecting to the Spotify app with a stored access token")
             appRemote.connectionParameters.accessToken = token
             appRemote.connect()
         } else {
             // No token: only `authorizeAndPlayURI` can both authorize us and
             // wake the Spotify app into a connectable state.
+            SpotifyLog.debug("No usable access token; going straight to authorizeAndPlayURI")
             beginAuthorizeAndPlay()
         }
     }
@@ -109,27 +119,74 @@ final class SpotifyRemoteManager: NSObject, SPTAppRemoteDelegate, SPTAppRemotePl
     }
 
     var isSpotifyAppInstalled: Bool {
-        guard let url = URL(string: "spotify:") else { return false }
+        Self.canOpen("spotify:")
+    }
+
+    /// `canOpenURL` is also false for any scheme the host app fails to declare
+    /// in `LSApplicationQueriesSchemes`, so a false answer here means "not
+    /// installed *or* not declared" — never just "not installed".
+    private static func canOpen(_ scheme: String) -> Bool {
+        guard let url = URL(string: scheme) else { return false }
         return UIApplication.shared.canOpenURL(url)
     }
 
     private func beginAuthorizeAndPlay() {
         didFallBackToAuthorizeAndPlay = true
+        SpotifyLog.debug("Falling back to authorizeAndPlayURI(\(pendingPlayUri ?? ""))")
         // An empty URI resumes the user's last context, per the SDK docs.
-        appRemote.authorizeAndPlayURI(pendingPlayUri ?? "") { [weak self] spotifyInstalled in
+        //
+        // The flag is *not* an install check, whatever its old name suggested.
+        // SPTAppRemote.h: "YES if the Spotify app is installed and an
+        // authorization attempt can be made, otherwise NO. […] not a measure of
+        // whether or not authentication succeeded". It comes back NO — in a few
+        // milliseconds, with no app switch — for a Spotify app that is both
+        // installed and running, so `canAttemptAuthorization` gets diagnosed
+        // rather than reported as "not installed".
+        appRemote.authorizeAndPlayURI(pendingPlayUri ?? "") { [weak self] canAttemptAuthorization in
             DispatchQueue.main.async {
-                guard let self = self, !spotifyInstalled else { return }
-                self.finishConnect(.failure(SpotifyError(
-                    .spotifyAppNotInstalled,
-                    "The Spotify app is not installed — App Remote playback requires it"
-                )))
+                guard let self = self, !canAttemptAuthorization else { return }
+                let error = self.authorizeAndPlayRefusal()
+                SpotifyLog.error("authorizeAndPlayURI refused: \(error.code.rawValue) — \(error.message)")
+                self.finishConnect(.failure(error))
             }
         }
+    }
+
+    /// Works out *why* `authorizeAndPlayURI` would not even try, instead of
+    /// blaming the one cause that is easiest to state.
+    private func authorizeAndPlayRefusal() -> SpotifyError {
+        if !Self.canOpen("spotify:") {
+            return SpotifyError(
+                .spotifyAppNotInstalled,
+                "Cannot reach the Spotify app: it is not installed, or your Info.plist does not list \"spotify\" "
+                    + "under LSApplicationQueriesSchemes. App Remote playback needs both."
+            )
+        }
+        // The SDK opens `spotify-action://authorize?response_type=token` for
+        // this flow, and iOS answers canOpenURL with false for every scheme the
+        // host app has not declared — so an undeclared scheme is refused here
+        // long before Spotify sees the request.
+        if !Self.canOpen("spotify-action:") {
+            return SpotifyError(
+                .authorizeAndPlayRefused,
+                "The Spotify app refused to start an authorization attempt: your Info.plist does not list "
+                    + "\"spotify-action\" under LSApplicationQueriesSchemes, which the Spotify SDK opens for "
+                    + "authorizeAndPlayURI. Declare both \"spotify\" and \"spotify-action\"."
+            )
+        }
+        return SpotifyError(
+            .authorizeAndPlayRefused,
+            "The Spotify app refused to start an authorization attempt (authorizeAndPlayURI returned NO while the "
+                + "app is installed and reachable). Check that a user is logged into the Spotify app, that this "
+                + "redirect URI is registered for your client ID, and that the account is on your app's User "
+                + "Management allowlist in the Spotify dashboard (development mode)."
+        )
     }
 
     private func startConnectTimeout() {
         connectTimeout?.cancel()
         let work = DispatchWorkItem { [weak self] in
+            SpotifyLog.error("Timed out after \(Self.connectTimeoutSeconds)s connecting to the Spotify app")
             self?.finishConnect(.failure(SpotifyError(
                 .connectionFailed,
                 "Timed out connecting to the Spotify app"
@@ -145,9 +202,23 @@ final class SpotifyRemoteManager: NSObject, SPTAppRemoteDelegate, SPTAppRemotePl
         pendingPlayUri = nil
         didFallBackToAuthorizeAndPlay = false
 
+        var result = result
+        if case .failure(let error) = result {
+            result = .failure(blaming(error))
+        }
+        firstAttemptError = nil
+
         let completions = pendingConnect
         pendingConnect.removeAll()
         completions.forEach { $0(result) }
+    }
+
+    /// Folds the first attempt's error into `error` — once, whichever of the
+    /// event or the rejection reaches for it first.
+    private func blaming(_ error: SpotifyError) -> SpotifyError {
+        guard let first = firstAttemptError else { return error }
+        firstAttemptError = nil
+        return error.withUnderlying(first)
     }
 
     private func emitConnectionState(connected: Bool, reason: String, error: SpotifyError? = nil) {
@@ -194,6 +265,7 @@ final class SpotifyRemoteManager: NSObject, SPTAppRemoteDelegate, SPTAppRemotePl
     // MARK: - SPTAppRemoteDelegate
 
     func appRemoteDidEstablishConnection(_ appRemote: SPTAppRemote) {
+        SpotifyLog.debug("App Remote connected")
         appRemote.playerAPI?.delegate = self
         appRemote.playerAPI?.subscribe(toPlayerState: { [weak self] result, error in
             guard error == nil else { return }
@@ -210,19 +282,33 @@ final class SpotifyRemoteManager: NSObject, SPTAppRemoteDelegate, SPTAppRemotePl
     }
 
     func appRemote(_ appRemote: SPTAppRemote, didFailConnectionAttemptWithError error: Error?) {
+        let description = SpotifyError.describe(error) ?? "no error reported"
+        SpotifyLog.error("App Remote connection attempt failed: \(description)")
+
         // Spotify refuses App Remote connections while it is not playing. The
         // documented remedy is authorizeAndPlayURI, which wakes it up.
         if !pendingConnect.isEmpty && !didFallBackToAuthorizeAndPlay {
+            // Held on to rather than dropped: whatever the fallback goes on to
+            // report, this is the error that explains the failure.
+            firstAttemptError = SpotifyError.describe(error)
             beginAuthorizeAndPlay()
             return
         }
 
-        let mapped = SpotifyError.from(error, fallback: .connectionFailed, prefix: "Could not connect to the Spotify app")
+        // Blamed before the event goes out, so listeners and the rejected
+        // promise tell the same story.
+        let mapped = blaming(SpotifyError.from(error, fallback: .connectionFailed, prefix: "Could not connect to the Spotify app"))
         emitConnectionState(connected: false, reason: "error", error: mapped)
         finishConnect(.failure(mapped))
     }
 
     func appRemote(_ appRemote: SPTAppRemote, didDisconnectWithError error: Error?) {
+        if let description = SpotifyError.describe(error) {
+            SpotifyLog.error("App Remote disconnected: \(description)")
+        } else {
+            SpotifyLog.debug("App Remote disconnected")
+        }
+
         if suppressDisconnectEvent {
             suppressDisconnectEvent = false
         } else if let error = error {

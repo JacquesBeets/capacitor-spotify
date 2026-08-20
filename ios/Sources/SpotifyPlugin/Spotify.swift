@@ -46,6 +46,7 @@ import SpotifyiOS
 
             self.remote?.disconnect()
 
+            SpotifyLog.isDebugEnabled = newConfig.debug
             let configuration = SPTConfiguration(clientID: newConfig.clientId, redirectURL: newConfig.redirectUrl)
             configuration.tokenSwapURL = newConfig.tokenSwapUrl
             configuration.tokenRefreshURL = newConfig.tokenRefreshUrl
@@ -53,7 +54,7 @@ import SpotifyiOS
             let auth = SpotifyAuthManager(config: newConfig, configuration: configuration)
             auth.onAuthStateChanged = { [weak self] payload in self?.onAuthStateChanged?(payload) }
 
-            let remote = SpotifyRemoteManager(configuration: configuration, auth: auth)
+            let remote = SpotifyRemoteManager(configuration: configuration, auth: auth, debug: newConfig.debug)
             remote.onConnectionStateChanged = { [weak self] payload in self?.onConnectionStateChanged?(payload) }
             remote.onPlayerStateChanged = { [weak self] payload in self?.onPlayerStateChanged?(payload) }
 

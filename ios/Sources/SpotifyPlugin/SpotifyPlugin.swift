@@ -89,7 +89,8 @@ public class SpotifyPlugin: CAPPlugin, CAPBridgedPlugin {
             redirectUrl: redirectUrl,
             scopes: requested.isEmpty ? SpotifyConfig.defaultScopes : requested,
             tokenSwapUrl: call.getString("tokenSwapUrl").flatMap { URL(string: $0) },
-            tokenRefreshUrl: call.getString("tokenRefreshUrl").flatMap { URL(string: $0) }
+            tokenRefreshUrl: call.getString("tokenRefreshUrl").flatMap { URL(string: $0) },
+            debug: call.getBool("debug", false)
         )
         implementation.initialize(config) { self.settle(call, $0) }
     }

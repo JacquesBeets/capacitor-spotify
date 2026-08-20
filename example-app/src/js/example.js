@@ -37,6 +37,8 @@ async function setup() {
       clientId: CLIENT_ID,
       redirectUri: REDIRECT_URI,
       playerName: 'Capacitor Spotify Example',
+      // Manual test bed: log the iOS SDK's own connect diagnostics too.
+      debug: true,
     }),
   );
 

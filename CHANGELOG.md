@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.5.0 — 2026-08-20
+
+Error reporting on iOS. Every item here was mis-diagnosed by an integrator
+because the plugin said something confidently wrong.
+
+- fix(ios): a `connect()` fallback that cannot start is no longer reported as
+  `SPOTIFY_APP_NOT_INSTALLED`. `authorizeAndPlayURI`'s flag means "installed
+  **and** an authorization attempt can be made" (`SPTAppRemote.h`), and it
+  comes back `NO` for a Spotify app that is installed and running. The refusal
+  is now diagnosed: `SPOTIFY_APP_NOT_INSTALLED` only when `canOpenURL`
+  ("spotify:") fails — naming the `LSApplicationQueriesSchemes` entry as the
+  other possible cause — and otherwise the new **`AUTHORIZE_AND_PLAY_REFUSED`**
+  code, which calls out a missing `spotify-action` scheme, a logged-out Spotify
+  app, an unregistered redirect URI or a dashboard User Management allowlist
+  miss.
+- fix(ios): `didFailConnectionAttemptWithError` no longer discards `error`. It
+  is logged, and it is carried into the eventual rejection message and into
+  `connectionStateChanged`'s new `error.cause` — so the JS side sees
+  `com.spotify.app-remote.transport Code=-2000 "Stream error."` instead of only
+  the fallback's verdict.
+- `initialize({ debug: true })` (iOS): raises the `SPTAppRemote` log level to
+  `debug` and logs the plugin's connect trail under the
+  `com.jacquesbeets.capacitor-spotify` subsystem. The SDK log level was
+  hard-coded to `none`; it now defaults to `error`, and connection failures are
+  logged whether or not `debug` is on.
+- docs: `LSApplicationQueriesSchemes` must declare **both** `spotify` and
+  `spotify-action` — the SDK opens
+  `spotify-action://authorize?response_type=token` for `authorizeAndPlayURI`,
+  and iOS refuses undeclared schemes. Troubleshooting gained the
+  `AUTHORIZE_AND_PLAY_REFUSED` checklist and the development-mode
+  user-registration signature (`403` on `/v1/me` while authorization succeeds).
+
 ## 0.4.1 — 2026-08-11
 
 - fix(ios): podspec renamed `CapacitorSpotify.podspec` →

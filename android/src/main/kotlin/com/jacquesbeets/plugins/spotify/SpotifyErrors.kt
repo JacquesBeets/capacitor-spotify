@@ -20,6 +20,10 @@ object SpotifyErrors {
     const val AUTH_FAILED = "AUTH_FAILED"
     const val TOKEN_REFRESH_FAILED = "TOKEN_REFRESH_FAILED"
     const val SPOTIFY_APP_NOT_INSTALLED = "SPOTIFY_APP_NOT_INSTALLED"
+
+    /** iOS only: `authorizeAndPlayURI` would not start an authorization attempt. */
+    const val AUTHORIZE_AND_PLAY_REFUSED = "AUTHORIZE_AND_PLAY_REFUSED"
+
     const val NOT_CONNECTED = "NOT_CONNECTED"
     const val CONNECTION_FAILED = "CONNECTION_FAILED"
     const val PREMIUM_REQUIRED = "PREMIUM_REQUIRED"

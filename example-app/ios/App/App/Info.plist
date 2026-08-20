@@ -25,6 +25,7 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>spotify</string>
+		<string>spotify-action</string>
 	</array>
 	<key>CFBundleURLTypes</key>
 	<array>

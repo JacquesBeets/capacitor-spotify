@@ -13,6 +13,7 @@ public enum SpotifyErrorCode: String {
     case authFailed = "AUTH_FAILED"
     case tokenRefreshFailed = "TOKEN_REFRESH_FAILED"
     case spotifyAppNotInstalled = "SPOTIFY_APP_NOT_INSTALLED"
+    case authorizeAndPlayRefused = "AUTHORIZE_AND_PLAY_REFUSED"
     case notConnected = "NOT_CONNECTED"
     case connectionFailed = "CONNECTION_FAILED"
     case premiumRequired = "PREMIUM_REQUIRED"
@@ -30,15 +31,47 @@ public enum SpotifyErrorCode: String {
 public struct SpotifyError: Error {
     public let code: SpotifyErrorCode
     public let message: String
+    /// The underlying SDK/transport failure, domain and code included — the
+    /// part that makes a Spotify SDK error searchable
+    /// (`com.spotify.app-remote.transport Code=-2000 "Stream error."`).
+    public let cause: String?
 
-    public init(_ code: SpotifyErrorCode, _ message: String) {
+    public init(_ code: SpotifyErrorCode, _ message: String, cause: String? = nil) {
         self.code = code
         self.message = message
+        self.cause = cause
     }
 
     /// Shape used inside the `error` field of `connectionStateChanged`.
     public var asJS: [String: Any] {
-        ["code": code.rawValue, "message": message]
+        var payload: [String: Any] = ["code": code.rawValue, "message": message]
+        if let cause = cause {
+            payload["cause"] = cause
+        }
+        return payload
+    }
+
+    /// Returns a copy that also names an earlier failure the caller never saw.
+    ///
+    /// Folded into `message` and not only into `cause`, because a Capacitor
+    /// rejection carries `message` and `code` across the bridge on every
+    /// platform while extra fields do not travel identically.
+    public func withUnderlying(_ description: String) -> SpotifyError {
+        guard cause != description else { return self }
+        return SpotifyError(
+            code,
+            "\(message) — the first connection attempt failed with: \(description)",
+            cause: cause ?? description
+        )
+    }
+
+    /// An `NSError` written out in full: domain, code and description. The
+    /// domain and code are what identify a Spotify SDK failure — a bare
+    /// `localizedDescription` like "Stream error." pins down nothing.
+    public static func describe(_ error: Error?) -> String? {
+        guard let error = error else { return nil }
+        let nsError = error as NSError
+        return "\(nsError.domain) Code=\(nsError.code) \"\(nsError.localizedDescription)\""
     }
 
     /// Best-effort translation of an SDK/transport error into a plugin error.
@@ -48,14 +81,17 @@ public struct SpotifyError: Error {
         }
         let nsError = error as NSError
         let message = prefix.isEmpty ? nsError.localizedDescription : "\(prefix): \(nsError.localizedDescription)"
+        return SpotifyError(code(for: nsError, fallback: fallback), message, cause: describe(error))
+    }
 
+    private static func code(for nsError: NSError, fallback: SpotifyErrorCode) -> SpotifyErrorCode {
         if nsError.domain == NSURLErrorDomain {
             switch nsError.code {
             case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost, NSURLErrorTimedOut,
                  NSURLErrorCannotConnectToHost, NSURLErrorDataNotAllowed:
-                return SpotifyError(.offline, message)
+                return .offline
             default:
-                return SpotifyError(fallback, message)
+                return fallback
             }
         }
 
@@ -63,18 +99,17 @@ public struct SpotifyError: Error {
             switch nsError.code {
             case SPTAppRemoteErrorCode.backgroundWakeupFailedError.rawValue,
                  SPTAppRemoteErrorCode.connectionAttemptFailedError.rawValue:
-                return SpotifyError(.connectionFailed, message)
+                return .connectionFailed
             case SPTAppRemoteErrorCode.connectionTerminatedError.rawValue:
-                return SpotifyError(.notConnected, message)
-            case SPTAppRemoteErrorCode.invalidArgumentsError.rawValue,
-                 SPTAppRemoteErrorCode.requestFailedError.rawValue:
-                return SpotifyError(fallback, message)
+                return .notConnected
+            // Includes invalidArgumentsError and requestFailedError, which the
+            // caller's own fallback describes better than we can here.
             default:
-                return SpotifyError(fallback, message)
+                return fallback
             }
         }
 
-        return SpotifyError(fallback, message)
+        return fallback
     }
 }
 
