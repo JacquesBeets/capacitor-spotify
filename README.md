@@ -18,6 +18,7 @@ Capacitor plugin for Spotify (Capacitor 7 and 8): one TypeScript API over the **
 | `getImage` (album art) | ✅ via Spotify app | ✅ via Spotify app | ✅ CDN URL |
 | `getUserCapabilities` (Premium check) | ✅ via Spotify app | ✅ via Spotify app | ✅ when connected |
 | `addToQueue` / `getDevices` / `transferPlayback` | ✅ Web API | ✅ Web API | ✅ Web API |
+| `diagnoseAccess()` (why is Spotify refusing?) | ✅ | ✅ | ✅ |
 | `playerStateChanged` live events | ✅ | ✅ | ✅ |
 | Audio plays… | in the Spotify app | in the Spotify app | in your web page |
 | Requires Spotify app installed | ✅ | ✅ | — |
@@ -213,6 +214,7 @@ A runnable demo lives in [`example-app/`](./example-app) — bring your own clie
 * [`getPlayerState()`](#getplayerstate)
 * [`getImage(...)`](#getimage)
 * [`getUserCapabilities()`](#getusercapabilities)
+* [`diagnoseAccess()`](#diagnoseaccess)
 * [`addToQueue(...)`](#addtoqueue)
 * [`getDevices()`](#getdevices)
 * [`transferPlayback(...)`](#transferplayback)
@@ -560,6 +562,29 @@ inferred from the user profile where available and otherwise rejects
 --------------------
 
 
+### diagnoseAccess()
+
+```typescript
+diagnoseAccess() => Promise<AccessDiagnosis>
+```
+
+Ask Spotify whether this app and account may use the Web API at all, by
+probing `GET /v1/me` (no scope or tier gate) and reporting its verdict.
+
+**Never rejects** — every outcome, including "not initialized" and "no
+session", comes back as an {@link <a href="#accessdiagnosis">AccessDiagnosis</a>}, so it is safe to call
+from a `catch` block and log in one line.
+
+Reach for this when `connect()` or a playback call fails for no visible
+reason. Authorization succeeds even when the app is blocked (PKCE checks
+neither the owner's subscription nor the development-mode allowlist), so a
+token in hand is not evidence of access — this is.
+
+**Returns:** <code>Promise&lt;<a href="#accessdiagnosis">AccessDiagnosis</a>&gt;</code>
+
+--------------------
+
+
 ### addToQueue(...)
 
 ```typescript
@@ -802,6 +827,22 @@ removeAllListeners() => Promise<void>
 | **`canPlayOnDemand`** | <code>boolean</code> | Whether the user's account can play arbitrary content on demand (Premium). Free-tier accounts get shuffle-based playback and cannot seek or pick exact tracks — check this before enabling such UI. |
 
 
+#### AccessDiagnosis
+
+What Spotify itself says about your app and the signed-in account, as
+returned by {@link SpotifyPlugin.diagnoseAccess}.
+
+| Prop                 | Type                                                          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`ok`**             | <code>boolean</code>                                          | True when `GET /v1/me` returned 200 — app and account can use the Web API.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **`message`**        | <code>string</code>                                           | One-line reading of the probe, always present. When Spotify refused the request this names the likely cause in plain words, including the case its own message gets wrong (see {@link <a href="#accessdiagnosis">AccessDiagnosis.spotifyMessage</a>}).                                                                                                                                                                                                                                                                                                                                                                    |
+| **`code`**           | <code><a href="#spotifyerrorcode">SpotifyErrorCode</a></code> | The code a normal call would reject with for this condition. Absent when `ok`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **`httpStatus`**     | <code>number</code>                                           | HTTP status of the probe, when Spotify answered at all.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **`spotifyMessage`** | <code>string</code>                                           | Spotify's own message, verbatim (truncated at 500 characters) — the reason for running this at all. The two app-level `403`s are indistinguishable from the native side but say different things here: - `"Active premium subscription required for the owner of the app…"` — the account that owns your dashboard app has no active Premium subscription. This blocks every user of the app, whatever their own tier. - `"Check settings on https://developer.spotify.com/dashboard, the user may not be registered."` — sent to non-owner accounts for *either* cause, so it is not proof of a User Management problem. |
+| **`userId`**         | <code>string</code>                                           | The account's Spotify user ID, when the probe succeeded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **`product`**        | <code>string</code>                                           | `premium` or `free`, when the granted scopes let Spotify report it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+
+
 #### SpotifyDevice
 
 | Prop                   | Type                        | Description                                                                |
@@ -900,7 +941,14 @@ carry the same `code` property. Switch on `error.code` in your app.
 4. No user is logged into the Spotify app on the device.
 5. The redirect URI passed to `initialize()` is not registered, character for character, for this client ID.
 
-Causes 1 and 2 are indistinguishable from the native side — both produce this refusal *and* `com.spotify.app-remote.transport Code=-2000 "Stream error."` — so read Spotify's own message: call `GET https://api.spotify.com/v1/me` with a token from `getAccessToken()` and look at the 403 body. `/v1/me` has no scope or tier gate, so a 403 there is about the app, not the request. PKCE authorization checks none of this, which is why `authorize()` succeeds and everything afterwards fails: **a token in hand is not evidence that the account can use your app.**
+Causes 1 and 2 are indistinguishable from the native side — both produce this refusal *and* `com.spotify.app-remote.transport Code=-2000 "Stream error."` — so ask Spotify:
+
+```typescript
+const d = await Spotify.diagnoseAccess(); // never rejects
+console.log(d.ok, d.code, d.message, d.spotifyMessage);
+```
+
+[`diagnoseAccess()`](#diagnoseaccess) probes `GET /v1/me` (no scope or tier gate, so a 403 there is about the app rather than the request) and hands back Spotify's own message plus a plain-words reading of it. PKCE authorization checks none of this, which is why `authorize()` succeeds and everything afterwards fails: **a token in hand is not evidence that the account can use your app.**
 
 **iOS: diagnosing any other `connect()` failure** — pass `debug: true` to `initialize()`. That raises the Spotify SDK's own log level (`SPTAppRemote`, otherwise `error`) and adds the plugin's connect trail, both under the `com.jacquesbeets.capacitor-spotify` subsystem:
 
@@ -916,7 +964,7 @@ Connection failures are logged even without `debug`, and the underlying SDK erro
 
 **Web: `authorize()` seems to do nothing** — it navigates the page to Spotify. Make sure you call `initialize()` on startup so the redirect back completes the flow, and that the page URL you started from is the registered redirect URI.
 
-**403 from playback calls** — three different conditions, and Spotify's message is the only way to tell them apart: the **app owner's** Premium subscription lapsed (blocks everyone, whatever their tier), the user isn't in your app's User Management allowlist (development mode, max 5), or the user isn't Premium for a call that needs it. Probe `GET /v1/me` — no scope or tier gate, so a 403 there is about the app — and read the body. `"the user may not be registered"` is returned to non-owner accounts for the owner-subscription case too, so treat it as "app-level problem", not specifically as an allowlist miss.
+**403 from playback calls** — call `diagnoseAccess()` first; it names which of these it is. Three different conditions, and Spotify's message is the only way to tell them apart: the **app owner's** Premium subscription lapsed (blocks everyone, whatever their tier), the user isn't in your app's User Management allowlist (development mode, max 5), or the user isn't Premium for a call that needs it. Probe `GET /v1/me` — no scope or tier gate, so a 403 there is about the app — and read the body. `"the user may not be registered"` is returned to non-owner accounts for the owner-subscription case too, so treat it as "app-level problem", not specifically as an allowlist miss.
 
 **`PLAYBACK_FAILED: Cannot seek in song [CANT_PLAY_ON_DEMAND]`** — the account is playing in Free-tier (non-on-demand) mode; Spotify disallows seeking there. Check `state.restrictions.canSeek` and disable your seek UI when false — the other `restrictions` flags work the same way.
 

@@ -50,7 +50,69 @@ class SpotifyWebApi(
         }
     }
 
+    /**
+     * Calls [pathWithQuery] and reports the raw status and body instead of
+     * mapping them onto a [SpotifyException].
+     *
+     * `diagnoseAccess()` needs it that way: *which* `403` Spotify sends is the
+     * whole diagnosis, and mapping throws that text away. A `401` still earns
+     * one forced-refresh retry, so a merely stale token is not reported as a
+     * problem with the app.
+     */
+    fun probe(pathWithQuery: String, onResult: (SpotifyAccessDiagnosis) -> Unit) {
+        executor.execute {
+            val diagnosis = try {
+                probe(pathWithQuery, retry = true)
+            } catch (e: SpotifyException) {
+                SpotifyAccessDiagnosis.failed(e.code, e.message ?: "The Spotify Web API probe failed.")
+            } catch (e: Exception) {
+                SpotifyAccessDiagnosis.failed(SpotifyErrors.UNKNOWN, e.message ?: "The Spotify Web API probe failed.")
+            }
+            onResult(diagnosis)
+        }
+    }
+
     // region internals
+
+    private fun probe(pathWithQuery: String, retry: Boolean): SpotifyAccessDiagnosis {
+        val token = accessToken(forceRefresh = !retry)
+
+        var connection: HttpsURLConnection? = null
+        try {
+            connection = (URL("$API_BASE$pathWithQuery").openConnection() as HttpsURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = TIMEOUT_MS
+                readTimeout = TIMEOUT_MS
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("Accept", "application/json")
+            }
+
+            val status = connection.responseCode
+            if (status == HttpsURLConnection.HTTP_UNAUTHORIZED && retry) {
+                connection.disconnect()
+                connection = null
+                return probe(pathWithQuery, retry = false)
+            }
+
+            // Whole body, not the 500-char error snippet: a truncated `/me`
+            // payload is not parseable JSON. The diagnosis trims what it shows.
+            val body = if (status in 200..299) readBody(connection) else readErrorBody(connection)
+            return SpotifyAccessDiagnosis.from(status, body)
+        } catch (e: IOException) {
+            return SpotifyAccessDiagnosis.failed(
+                SpotifyErrors.OFFLINE,
+                "The Spotify Web API is unreachable: ${e.message}",
+            )
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    private fun readBody(connection: HttpsURLConnection): String = try {
+        connection.inputStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty().trim()
+    } catch (e: IOException) {
+        ""
+    }
 
     /**
      * @param retry whether a `401` may be retried once with a forced token

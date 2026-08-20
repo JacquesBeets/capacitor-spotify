@@ -69,6 +69,75 @@ final class SpotifyTests: XCTestCase {
         XCTAssertEqual(SpotifyError.from(offline, fallback: .connectionFailed).code, .offline)
     }
 
+    // MARK: - diagnoseAccess
+
+    /// The owner-subscription 403 is the one the old error reporting hid, and
+    /// Spotify's own wording is what tells it apart from an allowlist miss.
+    func testDiagnosisNamesTheOwnerSubscription() {
+        let body = """
+        {"error":{"status":403,"message":"Active premium subscription required for the owner of the app. \
+        When the subscription status changes, it can take a few hours before requests are allowed again."}}
+        """
+        let diagnosis = SpotifyAccessDiagnosis.from(status: 403, body: body)
+
+        XCTAssertFalse(diagnosis.allowed)
+        XCTAssertEqual(diagnosis.code, .premiumRequired)
+        XCTAssertEqual(diagnosis.httpStatus, 403)
+        XCTAssertTrue(diagnosis.message.contains("owns your dashboard app"))
+        // Spotify's own text, unwrapped from its JSON envelope and verbatim.
+        XCTAssertEqual(diagnosis.spotifyMessage?.hasPrefix("Active premium subscription required"), true)
+        XCTAssertNil(diagnosis.userId)
+    }
+
+    /// The message a non-owner account gets for *either* cause. The reading has
+    /// to warn that it names the wrong setting.
+    func testDiagnosisDistrustsTheNotRegisteredMessage() {
+        let body = """
+        {"error":{"status":403,"message":"Check settings on https://developer.spotify.com/dashboard, \
+        the user may not be registered."}}
+        """
+        let diagnosis = SpotifyAccessDiagnosis.from(status: 403, body: body)
+
+        XCTAssertEqual(diagnosis.code, .userNotAuthorized)
+        XCTAssertTrue(diagnosis.message.contains("owner's subscription first"))
+        XCTAssertEqual(diagnosis.spotifyMessage?.contains("may not be registered"), true)
+    }
+
+    func testDiagnosisReadsTheProfileOnSuccess() {
+        let diagnosis = SpotifyAccessDiagnosis.from(
+            status: 200,
+            body: #"{"id":"someuser","product":"premium","display_name":"Someone"}"#
+        )
+
+        XCTAssertTrue(diagnosis.allowed)
+        XCTAssertNil(diagnosis.code)
+        XCTAssertEqual(diagnosis.userId, "someuser")
+        XCTAssertEqual(diagnosis.product, "premium")
+        XCTAssertNil(diagnosis.asJS["spotifyMessage"], "nothing was refused, so there is nothing to quote")
+        XCTAssertEqual(diagnosis.asJS["ok"] as? Bool, true)
+    }
+
+    /// A non-JSON body still has to produce a usable diagnosis rather than
+    /// swallowing whatever Spotify (or a proxy) actually said.
+    func testDiagnosisFallsBackToTheRawBody() {
+        let diagnosis = SpotifyAccessDiagnosis.from(status: 502, body: "<html>Bad gateway</html>")
+
+        XCTAssertEqual(diagnosis.code, .unknown)
+        XCTAssertEqual(diagnosis.spotifyMessage, "<html>Bad gateway</html>")
+        XCTAssertTrue(diagnosis.message.contains("HTTP 502"))
+    }
+
+    /// No answer at all — no session, no network, no plugin — is still reported,
+    /// never thrown: `diagnoseAccess()` is what a caller reaches for in a catch.
+    func testDiagnosisReportsAFailureToEvenAsk() {
+        let diagnosis = SpotifyAccessDiagnosis.failed(SpotifyError(.notAuthenticated, "No Spotify session"))
+
+        XCTAssertFalse(diagnosis.allowed)
+        XCTAssertEqual(diagnosis.code, .notAuthenticated)
+        XCTAssertEqual(diagnosis.message, "No Spotify session")
+        XCTAssertNil(diagnosis.asJS["httpStatus"])
+    }
+
     /// A nil player state still has to produce the full `PlayerState` shape so
     /// JS callers never have to null-check the event payload itself.
     func testPlayerStateToJSWithNilStateIsTotal() {

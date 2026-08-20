@@ -63,6 +63,7 @@ const actions = {
   getAccessToken: () => Spotify.getAccessToken(),
   logout: () => Spotify.logout(),
   isSpotifyAppInstalled: () => Spotify.isSpotifyAppInstalled(),
+  diagnoseAccess: () => Spotify.diagnoseAccess(),
   connect: () => Spotify.connect({ playUri: '' }),
   disconnect: () => Spotify.disconnect(),
   play: () => Spotify.play({ uri: document.getElementById('uriInput').value || undefined }),

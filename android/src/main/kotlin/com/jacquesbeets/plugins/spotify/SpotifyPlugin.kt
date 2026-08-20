@@ -385,6 +385,24 @@ class SpotifyPlugin : Plugin() {
 
     // region web api
 
+    /**
+     * Never rejects: "not initialized" is itself a diagnosis, so it is reported
+     * in the payload rather than as a rejection.
+     */
+    @PluginMethod
+    fun diagnoseAccess(call: PluginCall) {
+        if (!initialized) {
+            call.resolve(
+                SpotifyAccessDiagnosis.failed(
+                    SpotifyErrors.NOT_INITIALIZED,
+                    "Call initialize() before using the Spotify plugin.",
+                ).toJSObject(),
+            )
+            return
+        }
+        webApi.probe("/me") { diagnosis -> call.resolve(diagnosis.toJSObject()) }
+    }
+
     @PluginMethod
     fun addToQueue(call: PluginCall) {
         if (!requireInitialized(call)) return

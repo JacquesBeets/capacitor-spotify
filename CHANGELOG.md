@@ -16,6 +16,13 @@ because the plugin said something confidently wrong.
   **owner** holding no active Premium subscription, the account missing from
   User Management on a development-mode app, a missing `spotify-action` scheme,
   a logged-out Spotify app, an unregistered redirect URI.
+- New **`diagnoseAccess()`** on all three platforms: probes `GET /v1/me` (no
+  scope or tier gate) and reports Spotify's own verdict — `ok`, the plugin
+  `code`, `httpStatus`, Spotify's verbatim `spotifyMessage`, and a plain-words
+  `message` that names the owner-subscription case its own text hides. **Never
+  rejects**, so it is safe to call straight from a `catch` block; "not
+  initialized" and "no session" come back as diagnoses too. This turns the
+  investigation above into one line.
 - fix(ios): `didFailConnectionAttemptWithError` no longer discards `error`. It
   is logged, and it is carried into the eventual rejection message and into
   `connectionStateChanged`'s new `error.cause` — so the JS side sees

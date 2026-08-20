@@ -175,6 +175,42 @@ export interface UserCapabilities {
   canPlayOnDemand: boolean;
 }
 
+/**
+ * What Spotify itself says about your app and the signed-in account, as
+ * returned by {@link SpotifyPlugin.diagnoseAccess}.
+ */
+export interface AccessDiagnosis {
+  /** True when `GET /v1/me` returned 200 — app and account can use the Web API. */
+  ok: boolean;
+  /**
+   * One-line reading of the probe, always present. When Spotify refused the
+   * request this names the likely cause in plain words, including the case its
+   * own message gets wrong (see {@link AccessDiagnosis.spotifyMessage}).
+   */
+  message: string;
+  /** The code a normal call would reject with for this condition. Absent when `ok`. */
+  code?: SpotifyErrorCode;
+  /** HTTP status of the probe, when Spotify answered at all. */
+  httpStatus?: number;
+  /**
+   * Spotify's own message, verbatim (truncated at 500 characters) — the reason
+   * for running this at all. The two app-level `403`s are indistinguishable
+   * from the native side but say different things here:
+   *
+   * - `"Active premium subscription required for the owner of the app…"` — the
+   *   account that owns your dashboard app has no active Premium subscription.
+   *   This blocks every user of the app, whatever their own tier.
+   * - `"Check settings on https://developer.spotify.com/dashboard, the user may
+   *   not be registered."` — sent to non-owner accounts for *either* cause, so
+   *   it is not proof of a User Management problem.
+   */
+  spotifyMessage?: string;
+  /** The account's Spotify user ID, when the probe succeeded. */
+  userId?: string;
+  /** `premium` or `free`, when the granted scopes let Spotify report it. */
+  product?: string;
+}
+
 export interface SpotifyDevice {
   /** Connect device ID. Null for devices that cannot be targeted. */
   id: string | null;
@@ -383,6 +419,21 @@ export interface SpotifyPlugin {
    * `NOT_SUPPORTED` (development-mode apps get no subscription field).
    */
   getUserCapabilities(): Promise<UserCapabilities>;
+
+  /**
+   * Ask Spotify whether this app and account may use the Web API at all, by
+   * probing `GET /v1/me` (no scope or tier gate) and reporting its verdict.
+   *
+   * **Never rejects** — every outcome, including "not initialized" and "no
+   * session", comes back as an {@link AccessDiagnosis}, so it is safe to call
+   * from a `catch` block and log in one line.
+   *
+   * Reach for this when `connect()` or a playback call fails for no visible
+   * reason. Authorization succeeds even when the app is blocked (PKCE checks
+   * neither the owner's subscription nor the development-mode allowlist), so a
+   * token in hand is not evidence of access — this is.
+   */
+  diagnoseAccess(): Promise<AccessDiagnosis>;
 
   /**
    * Append a track/episode URI to the playback queue (Web API on all

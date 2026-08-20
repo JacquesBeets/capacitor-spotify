@@ -218,6 +218,18 @@ import SpotifyiOS
         }
     }
 
+    /// Never fails: "not initialized" is itself a diagnosis, so it is reported
+    /// in the payload rather than as a rejection.
+    func diagnoseAccess(completion: @escaping DataResult) {
+        onMain {
+            guard let webApi = self.webApi else {
+                completion(.success(SpotifyAccessDiagnosis.failed(Self.notInitialized).asJS))
+                return
+            }
+            webApi.probe(path: "/me") { completion(.success($0.asJS)) }
+        }
+    }
+
     private static func devicesPayload(_ data: Data?) -> Result<[String: Any], SpotifyError> {
         guard let data = data,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {

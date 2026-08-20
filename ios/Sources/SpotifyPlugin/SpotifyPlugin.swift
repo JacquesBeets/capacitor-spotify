@@ -33,6 +33,7 @@ public class SpotifyPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getPlayerState", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getImage", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getUserCapabilities", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "diagnoseAccess", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "addToQueue", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getDevices", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "transferPlayback", returnType: CAPPluginReturnPromise)
@@ -198,6 +199,10 @@ public class SpotifyPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     // MARK: - Web API
+
+    @objc func diagnoseAccess(_ call: CAPPluginCall) {
+        implementation.diagnoseAccess { self.settle(call, $0) }
+    }
 
     @objc func addToQueue(_ call: CAPPluginCall) {
         guard let uri = call.getString("uri"), !uri.isEmpty else {
